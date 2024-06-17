@@ -6,11 +6,6 @@ import (
 	"time"
 )
 
-type PageInfo struct {
-	URL         string
-	PageNumbers int
-}
-
 type PartialBookInfo struct {
 	Price     string
 	Available bool
@@ -25,6 +20,7 @@ type FullBookInfo struct {
 	Author    string
 	Category  string
 	Language  string
+	Variant   string
 	Editor    string
 	ImageURL  string
 }
@@ -72,21 +68,13 @@ Loop:
 		if !ok {
 			booksToAdd = append(booksToAdd, newBookInfo)
 		} else {
+			// Add book to the list of books to update if either availability or price change.
 			if bookFromDB.Available != newBookInfo.Available || bookFromDB.Price != newBookInfo.Price {
 				booksToUpdate[newBookInfo.URL] = PartialBookInfo{Price: newBookInfo.Price, Available: newBookInfo.Available}
 			}
 		}
 	}
 	fmt.Println(len(booksToAdd), "books to add.", len(booksToUpdate), "books to update.")
-
-	imageURLToBookURLMap := make(map[string]string, len(booksToAdd))
-	for _, bookToAdd := range booksToAdd {
-		imageURLToBookURLMap[bookToAdd.ImageURL] = bookToAdd.URL
-	}
-
-	imagesChannel := make(chan URLAndImage, 500)
-
-	downloadNewBookImages(booksToAdd, imagesChannel)
 
 	client, err := connectToMongo("mongodb://localhost:27017/")
 	if err != nil {
@@ -95,19 +83,8 @@ Loop:
 	}
 
 	booksCollection := client.Database("Mondadori").Collection("Books")
-	imagesCollection := client.Database("Mondadori").Collection("BookImages")
 
 	var mongoDBOperationsWG sync.WaitGroup
-
-	mongoDBOperationsWG.Add(1)
-	go func() {
-		defer mongoDBOperationsWG.Done()
-		for urlAndImage := range imagesChannel {
-			urlAndImage.URL = imageURLToBookURLMap[urlAndImage.URL]
-			insertImage(imagesCollection, urlAndImage)
-		}
-		fmt.Println("Finished inserting images in DB")
-	}()
 
 	mongoDBOperationsWG.Add(1)
 	go func() {
@@ -120,8 +97,7 @@ Loop:
 
 	mongoDBOperationsWG.Wait()
 
-	// TODO Update infos
+	// TODO Process books to update by filling first dbBookInfos and then using booksToUpdate
 
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds")
-
 }

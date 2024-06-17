@@ -12,9 +12,14 @@ import (
 	"time"
 )
 
+type MondadoriPageInfo struct {
+	URL         string
+	PageNumbers int
+}
+
 func getBooks(booksChannel chan<- FullBookInfo) {
 	var err error
-	pageInfos := []PageInfo{
+	pageInfos := []MondadoriPageInfo{
 		{URL: "https://www.mondadoristore.it/libri/italiani/Ambiente-e-Animali/genG001/"},
 		{URL: "https://www.mondadoristore.it/libri/italiani/Informatica-e-Web/genG00F/"},
 		{URL: "https://www.mondadoristore.it/libri/italiani/Architettura-Design-e-Moda/genG002/"},
@@ -44,10 +49,8 @@ func getBooks(booksChannel chan<- FullBookInfo) {
 		{URL: "https://www.mondadoristore.it/libri/italiani/Storia-e-Biografie/genG00Q/"},
 	}
 
-	var URLList []string
-
+	// Create colly collector, while impersonating chrome.
 	fakeChrome := req.DefaultClient().ImpersonateChrome()
-
 	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")))
 	c.SetClient(&http.Client{
 		Transport: fakeChrome.Transport,
@@ -55,6 +58,7 @@ func getBooks(booksChannel chan<- FullBookInfo) {
 	})
 	c.SetRequestTimeout(30 * time.Second)
 
+	var URLList []string
 	c.OnHTML("li.item.word", func(element *colly.HTMLElement) {
 		if element.Index == 1 {
 			nPages, _ := strconv.Atoi(element.Text)
@@ -72,10 +76,12 @@ func getBooks(booksChannel chan<- FullBookInfo) {
 		}
 	}
 
-	// Wait for the number of pages being computed before exploring all the content
+	// Wait for the number of pages being computed before exploring all the content.
 	c.Wait()
+	// Remove previous "onHTML" listener.
 	c.OnHTMLDetach("li.item.word")
 
+	// Core logic: visit book pages and gather book details.
 	pageVisitedChan := make(chan struct{}, 5)
 	c.OnHTML("#div_container", func(element *colly.HTMLElement) {
 		pageVisitedChan <- struct{}{}
@@ -92,6 +98,7 @@ func getBooks(booksChannel chan<- FullBookInfo) {
 			bookCategory := element.ChildAttr("div.info-data-product", "data-category")
 			bookAuthor := element.ChildAttr("div.info-data-product", "data-dimension15")
 			bookLanguage := element.ChildAttr("div.info-data-product", "data-dimension14")
+			bookVariant := element.ChildAttr("div.info-data-product", "data-variant")
 			bookEditor := element.ChildAttr("div.info-data-product", "data-brand")
 			bookImageURL := element.ChildAttr("img.image.first-img.product-img.is-book.maxHeightLarge", "src")
 			booksChannel <- FullBookInfo{
@@ -102,6 +109,7 @@ func getBooks(booksChannel chan<- FullBookInfo) {
 				Category:  bookCategory,
 				Author:    bookAuthor,
 				Language:  bookLanguage,
+				Variant:   bookVariant,
 				Editor:    bookEditor,
 				Available: bookAvailable,
 				ImageURL:  strings.Replace("https://www.mondadoristore.it"+bookImageURL, "/ZOM/", "/NZO/", 1),
@@ -109,15 +117,16 @@ func getBooks(booksChannel chan<- FullBookInfo) {
 		})
 	})
 
+	// Retry (infinitely!) on page errors.
 	pageErroredChan := make(chan struct{}, 5)
 	c.OnError(func(response *colly.Response, err error) {
 		pageErroredChan <- struct{}{}
 		_ = response.Request.Retry()
 	})
 
+	// Wait for successfully visited pages and log timing.
 	numPageVisited := 0
 	lastTimeVisited := time.Now()
-
 	go func() {
 		for range pageVisitedChan {
 			numPageVisited++
@@ -128,9 +137,9 @@ func getBooks(booksChannel chan<- FullBookInfo) {
 		}
 	}()
 
+	// Wait for errored pages and log timing.
 	numPageErrored := 0
 	lastTimeError := time.Now()
-
 	go func() {
 		for range pageErroredChan {
 			numPageErrored++
@@ -143,7 +152,9 @@ func getBooks(booksChannel chan<- FullBookInfo) {
 
 	q, _ := queue.New(60, &queue.InMemoryQueueStorage{MaxSize: 40000})
 
+	// Shuffling for the sake of not visiting all the pages from the same category, to average their speeds.
 	shuffle(URLList)
+	// Adding all URLs to the queue
 	for _, URL := range URLList {
 		err := q.AddURL(URL)
 		if err != nil {
