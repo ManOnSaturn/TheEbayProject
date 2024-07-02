@@ -6,16 +6,17 @@ import (
 	"time"
 )
 
-type PartialBookInfo struct {
+type BookPartial struct {
+	ISBN      string
 	Price     string
 	Available bool
 }
 
-type FullBookInfo struct {
+type BookFull struct {
+	ISBN      string
 	URL       string
 	Price     string
 	Available bool
-	ISBN      string
 	Title     string
 	Author    string
 	Category  string
@@ -26,12 +27,10 @@ type FullBookInfo struct {
 }
 
 func main() {
-
-	bookInfoChannel := make(chan FullBookInfo, 500)
-	dbBookInfos := make(map[string]PartialBookInfo, 750000)
-	var wg sync.WaitGroup
-
 	startTime := time.Now()
+
+	bookInfoChannel := make(chan BookFull, 500)
+	var wg sync.WaitGroup
 
 	go func() {
 		defer wg.Done()
@@ -44,7 +43,7 @@ func main() {
 		close(bookInfoChannel)
 	}()
 
-	bookInfosMap := make(map[FullBookInfo]bool, 750000)
+	bookInfosMap := make(map[BookFull]bool, 750000)
 
 Loop:
 	for {
@@ -57,32 +56,35 @@ Loop:
 			bookInfosMap[bookInfo] = true
 		}
 	}
+
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds")
 
-	var booksToAdd []FullBookInfo
-	booksToUpdate := make(map[string]PartialBookInfo, 100)
+	client, err := connectToMongo("mongodb://localhost:27017/")
+	booksCollection := client.Database("Mondadori").Collection("Books2")
+
+	dbBooks := make(map[string]BookPartial, 750000)
+	getAllDB(booksCollection, dbBooks)
+	var booksToAdd []BookFull
+	var booksToUpdate []BookPartial
 
 	fmt.Println("Creating lists of books to create and books to update")
 	for newBookInfo := range bookInfosMap {
-		bookFromDB, ok := dbBookInfos[newBookInfo.URL]
+		bookFromDB, ok := dbBooks[newBookInfo.ISBN]
 		if !ok {
 			booksToAdd = append(booksToAdd, newBookInfo)
 		} else {
 			// Add book to the list of books to update if either availability or price change.
 			if bookFromDB.Available != newBookInfo.Available || bookFromDB.Price != newBookInfo.Price {
-				booksToUpdate[newBookInfo.URL] = PartialBookInfo{Price: newBookInfo.Price, Available: newBookInfo.Available}
+				booksToUpdate = append(booksToUpdate, BookPartial{ISBN: bookFromDB.ISBN, Price: newBookInfo.Price, Available: newBookInfo.Available})
 			}
 		}
 	}
 	fmt.Println(len(booksToAdd), "books to add.", len(booksToUpdate), "books to update.")
 
-	client, err := connectToMongo("mongodb://localhost:27017/")
 	if err != nil {
 		fmt.Println("Error occurred while trying to connect to MongoDB")
 		return
 	}
-
-	booksCollection := client.Database("Mondadori").Collection("Books")
 
 	var mongoDBOperationsWG sync.WaitGroup
 
@@ -92,12 +94,23 @@ Loop:
 		for _, bookToAdd := range booksToAdd {
 			insertBook(booksCollection, bookToAdd)
 		}
-		fmt.Println("Finished inserting books in DB")
+		fmt.Println("Finished inserting books in Books DB")
 	}()
 
 	mongoDBOperationsWG.Wait()
 
-	// TODO Process books to update by filling first dbBookInfos and then using booksToUpdate
+	booksToUpdateCollection := client.Database("Mondadori").Collection("BooksToUpdate")
+
+	mongoDBOperationsWG.Add(1)
+	go func() {
+		defer mongoDBOperationsWG.Done()
+		for _, bookToUpdate := range booksToUpdate {
+			insertBookToUpdate(booksToUpdateCollection, bookToUpdate)
+		}
+		fmt.Println("Finished inserting books in BooksToUpdate DB")
+	}()
+
+	mongoDBOperationsWG.Wait()
 
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds")
 }

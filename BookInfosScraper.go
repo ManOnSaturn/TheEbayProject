@@ -17,7 +17,7 @@ type MondadoriPageInfo struct {
 	PageNumbers int
 }
 
-func getBooks(booksChannel chan<- FullBookInfo) {
+func getBooks(booksChannel chan<- BookFull) {
 	var err error
 	pageInfos := []MondadoriPageInfo{
 		{URL: "https://www.mondadoristore.it/libri/italiani/Ambiente-e-Animali/genG001/"},
@@ -99,7 +99,7 @@ func getBooks(booksChannel chan<- FullBookInfo) {
 			bookVariant := element.ChildAttr("div.info-data-product", "data-variant")
 			bookEditor := element.ChildAttr("div.info-data-product", "data-brand")
 			bookImageURL := element.ChildAttr("img.image.first-img.product-img.is-book.maxHeightLarge", "src")
-			booksChannel <- FullBookInfo{
+			booksChannel <- BookFull{
 				ISBN:      bookISBN,
 				URL:       bookURL,
 				Title:     bookTitle,
