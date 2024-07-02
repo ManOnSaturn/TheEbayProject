@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"go.mongodb.org/mongo-driver/mongo"
 	"sync"
 	"time"
 )
@@ -10,6 +11,13 @@ type BookPartial struct {
 	ISBN      string
 	Price     string
 	Available bool
+}
+
+type DBBook struct {
+	ISBN      string
+	Price     string
+	Available bool
+	Found     bool
 }
 
 type BookFull struct {
@@ -62,24 +70,7 @@ Loop:
 	client, err := connectToMongo("mongodb://localhost:27017/")
 	booksCollection := client.Database("Mondadori").Collection("Books2")
 
-	dbBooks := make(map[string]BookPartial, 750000)
-	getAllDB(booksCollection, dbBooks)
-	var booksToAdd []BookFull
-	var booksToUpdate []BookPartial
-
-	fmt.Println("Creating lists of books to create and books to update")
-	for newBookInfo := range bookInfosMap {
-		bookFromDB, ok := dbBooks[newBookInfo.ISBN]
-		if !ok {
-			booksToAdd = append(booksToAdd, newBookInfo)
-		} else {
-			// Add book to the list of books to update if either availability or price change.
-			if bookFromDB.Available != newBookInfo.Available || bookFromDB.Price != newBookInfo.Price {
-				booksToUpdate = append(booksToUpdate, BookPartial{ISBN: bookFromDB.ISBN, Price: newBookInfo.Price, Available: newBookInfo.Available})
-			}
-		}
-	}
-	fmt.Println(len(booksToAdd), "books to add.", len(booksToUpdate), "books to update.")
+	booksToAdd, booksToUpdate := getBooksToAddAndUpdate(booksCollection, bookInfosMap)
 
 	if err != nil {
 		fmt.Println("Error occurred while trying to connect to MongoDB")
@@ -113,4 +104,36 @@ Loop:
 	mongoDBOperationsWG.Wait()
 
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds")
+}
+
+func getBooksToAddAndUpdate(booksCollection *mongo.Collection, booksMap map[BookFull]bool) ([]BookFull, []BookPartial) {
+	dbBooks := make(map[string]DBBook, 750000)
+	getAllDB(booksCollection, dbBooks)
+	var booksToAdd []BookFull
+	var booksToUpdate []BookPartial
+
+	fmt.Println("Creating lists of books to create and books to update")
+	for newBookInfo := range booksMap {
+		bookFromDB, ok := dbBooks[newBookInfo.ISBN]
+		if !ok {
+			booksToAdd = append(booksToAdd, newBookInfo)
+		} else {
+			bookFromDB.Found = true
+			dbBooks[bookFromDB.ISBN] = bookFromDB
+			// Add book to the list of books to update if either availability or price change.
+			if bookFromDB.Available != newBookInfo.Available || bookFromDB.Price != newBookInfo.Price {
+				booksToUpdate = append(booksToUpdate, BookPartial{ISBN: bookFromDB.ISBN, Price: newBookInfo.Price, Available: newBookInfo.Available})
+			}
+		}
+	}
+	// If a database book has not been touched when going through all the books previously found on Mondadori,
+	// it means we have lost track of it, and we mark it as unavailable.
+	for _, book := range dbBooks {
+		if !book.Found {
+			booksToUpdate = append(booksToUpdate, BookPartial{ISBN: book.ISBN, Price: book.Price, Available: false})
+		}
+	}
+
+	fmt.Println(len(booksToAdd), "books to add.", len(booksToUpdate), "books to update.")
+	return booksToAdd, booksToUpdate
 }

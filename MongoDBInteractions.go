@@ -72,7 +72,7 @@ func insertBookToUpdate(coll *mongo.Collection, book BookPartial) {
 	}
 }
 
-func getAllDB(coll *mongo.Collection, dbBooks map[string]BookPartial) {
+func getAllDB(coll *mongo.Collection, dbBooks map[string]DBBook) {
 	// Find all documents
 	cur, err := coll.Find(context.TODO(), bson.D{})
 	if err != nil {
@@ -91,6 +91,6 @@ func getAllDB(coll *mongo.Collection, dbBooks map[string]BookPartial) {
 		if err != nil {
 			fmt.Println("Error occurred while decoding result", err)
 		}
-		dbBooks[result.ISBN] = BookPartial{ISBN: result.ISBN, Available: result.Available, Price: result.Price}
+		dbBooks[result.ISBN] = DBBook{ISBN: result.ISBN, Available: result.Available, Price: result.Price, Found: false}
 	}
 }
