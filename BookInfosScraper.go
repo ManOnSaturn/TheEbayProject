@@ -36,7 +36,6 @@ func getBooks(booksChannel chan<- FullBookInfo) {
 		{URL: "https://www.mondadoristore.it/libri/italiani/Hobby-e-Tempo-libero/genG00E/"},
 		{URL: "https://www.mondadoristore.it/libri/italiani/Informatica-e-Web/genG00F/"},
 		{URL: "https://www.mondadoristore.it/libri/italiani/Lingue-e-Dizionari/genG00G/"},
-		{URL: "https://www.mondadoristore.it/libri/italiani/Lingue-e-Dizionari/genG00G/"},
 		{URL: "https://www.mondadoristore.it/libri/italiani/Musica/genG00H/"},
 		{URL: "https://www.mondadoristore.it/libri/italiani/Passione-e-Sentimenti/genG00I/"},
 		{URL: "https://www.mondadoristore.it/libri/italiani/Politica-e-Societa/genG00J/"},
