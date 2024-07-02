@@ -21,7 +21,6 @@ func getBooks(booksChannel chan<- FullBookInfo) {
 	var err error
 	pageInfos := []MondadoriPageInfo{
 		{URL: "https://www.mondadoristore.it/libri/italiani/Ambiente-e-Animali/genG001/"},
-		{URL: "https://www.mondadoristore.it/libri/italiani/Informatica-e-Web/genG00F/"},
 		{URL: "https://www.mondadoristore.it/libri/italiani/Architettura-Design-e-Moda/genG002/"},
 		{URL: "https://www.mondadoristore.it/libri/italiani/Arte-Beni-culturali-e-Fotografia/genG003/"},
 		{URL: "https://www.mondadoristore.it/libri/italiani/Bambini-e-Ragazzi/genG004/"},
