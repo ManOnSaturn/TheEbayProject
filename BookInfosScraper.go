@@ -7,6 +7,7 @@ import (
 	"github.com/imroc/req/v3"
 	"math/rand"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -101,16 +102,16 @@ func getBooks(booksChannel chan<- BookFull) {
 			bookImageURL := element.ChildAttr("img.image.first-img.product-img.is-book.maxHeightLarge", "src")
 			booksChannel <- BookFull{
 				ISBN:      bookISBN,
-				URL:       bookURL,
 				Title:     bookTitle,
+				Available: bookAvailable,
 				Price:     bookPrice,
-				Category:  bookCategory,
+				URL:       bookURL,
+				ImageURL:  strings.Replace("https://www.mondadoristore.it"+bookImageURL, "/ZOM/", "/NZO/", 1),
 				Author:    bookAuthor,
-				Language:  bookLanguage,
+				Category:  bookCategory,
 				Variant:   bookVariant,
 				Editor:    bookEditor,
-				Available: bookAvailable,
-				ImageURL:  strings.Replace("https://www.mondadoristore.it"+bookImageURL, "/ZOM/", "/NZO/", 1),
+				Language:  bookLanguage,
 			}
 		})
 	})
@@ -128,8 +129,8 @@ func getBooks(booksChannel chan<- BookFull) {
 	go func() {
 		for range pageVisitedChan {
 			numPageVisited++
-			if numPageVisited%50 == 0 {
-				fmt.Println("50 visited pages every", time.Now().Sub(lastTimeVisited))
+			if numPageVisited%100 == 0 {
+				fmt.Println("100 visited pages every", time.Now().Sub(lastTimeVisited))
 				lastTimeVisited = time.Now()
 			}
 		}
@@ -148,7 +149,8 @@ func getBooks(booksChannel chan<- BookFull) {
 		}
 	}()
 
-	q, _ := queue.New(60, &queue.InMemoryQueueStorage{MaxSize: 40000})
+	const maxQueueSize = 40000
+	q, _ := queue.New(60, &queue.InMemoryQueueStorage{MaxSize: maxQueueSize})
 
 	// Shuffling for the sake of not visiting all the pages from the same category, to average their speeds.
 	shuffle(URLList)
@@ -164,6 +166,12 @@ func getBooks(booksChannel chan<- BookFull) {
 	size, _ := q.Size()
 
 	fmt.Println("Running queue of request of size: ", size)
+	if size > maxQueueSize-1000 {
+		_, err := fmt.Fprintln(os.Stderr, "Increase running queue size before it's too late!")
+		if err != nil {
+			fmt.Println("Error on using Fprintln on stderr:", err)
+		}
+	}
 	err = q.Run(c) // Blocking
 	if err != nil {
 		fmt.Println("Error on running: ", err)

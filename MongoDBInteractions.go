@@ -11,15 +11,16 @@ import (
 
 type mongoDBBookDocument struct {
 	ISBN      string `bson:"ISBN"`
-	URL       string `bson:"URL"`
+	Published bool   `bson:"Published"`
 	Title     string `bson:"Title"`
-	ImageURL  string `bson:"ImageURL"`
-	Price     string `bson:"Price"`
 	Available bool   `bson:"Available"`
+	Price     string `bson:"Price"`
+	URL       string `bson:"URL"`
+	ImageURL  string `bson:"ImageURL"`
 	Author    string `bson:"Author"`
 	Category  string `bson:"Category"`
-	Variant   string `bson:"Variant"`
 	Editor    string `bson:"Editor"`
+	Variant   string `bson:"Variant"`
 	Language  string `bson:"Language"`
 }
 
@@ -36,27 +37,32 @@ func connectToMongo(uri string) (*mongo.Client, error) {
 		return nil, err
 	}
 
-	fmt.Println("Connected to MongoDB!")
 	return client, nil
 }
 
-func insertBook(coll *mongo.Collection, book BookFull) {
-	document := mongoDBBookDocument{
-		ISBN:      book.ISBN,
-		URL:       book.URL,
-		ImageURL:  book.ImageURL,
-		Price:     book.Price,
-		Available: book.Available,
-		Title:     book.Title,
-		Author:    book.Author,
-		Category:  book.Category,
-		Language:  book.Language,
-		Variant:   book.Variant,
-		Editor:    book.Editor,
+func insertBooks(coll *mongo.Collection, books []BookFull) {
+	var documents []interface{}
+	for _, book := range books {
+		document := mongoDBBookDocument{
+			ISBN:      book.ISBN,
+			Published: false,
+			Title:     book.Title,
+			Available: book.Available,
+			Price:     book.Price,
+			URL:       book.URL,
+			ImageURL:  book.ImageURL,
+			Author:    book.Author,
+			Category:  book.Category,
+			Editor:    book.Editor,
+			Variant:   book.Variant,
+			Language:  book.Language,
+		}
+		documents = append(documents, document)
 	}
-	_, err := coll.InsertOne(context.TODO(), document)
+
+	_, err := coll.InsertMany(context.TODO(), documents)
 	if err != nil {
-		fmt.Println("Error occurred while inserting book document in MongoDB", err)
+		fmt.Println("Error occurred while inserting book documents in MongoDB", err, documents)
 	}
 }
 
@@ -68,7 +74,22 @@ func insertBookToUpdate(coll *mongo.Collection, book BookPartial) {
 	}
 	_, err := coll.InsertOne(context.TODO(), document)
 	if err != nil {
-		fmt.Println("Error occurred while inserting partial book document in MongoDB", err)
+		fmt.Println("Error occurred while inserting partial book document in MongoDB", err, document)
+	}
+}
+
+func updateBookToUpdate(coll *mongo.Collection, book BookPartial) {
+	filter := bson.M{"isbn": book.ISBN}
+	update := bson.M{
+		"$set": bson.M{
+			"Price":     book.Price,
+			"Available": book.Available,
+		},
+	}
+
+	result := coll.FindOneAndUpdate(context.TODO(), filter, update)
+	if result.Err() != nil {
+		fmt.Println("Error occurred while updating partial book document in MongoDB", result.Err(), filter, update)
 	}
 }
 
