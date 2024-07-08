@@ -1,6 +1,6 @@
 #!/bin/bash
 
-current_datetime=$(date '+%H-%M-%S')
+current_datetime=$(date '+%H-%M')
 
 output_dir="/home/pi/ebay/logs"
 
@@ -14,4 +14,4 @@ fi
 
 python_script="/home/pi/ebay/send_error.py"
 
-./Scraper > "$output_file" 2> >(tee -a "$output_file" | python3 "$python_script")
+/home/pi/ebay/Scraper > "$output_file" 2> >(tee -a "$output_file" | python3 "$python_script")
