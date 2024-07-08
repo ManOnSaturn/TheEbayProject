@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"go.mongodb.org/mongo-driver/mongo"
+	"golang.org/x/net/context"
+	"os"
 	"sync"
 	"time"
 )
@@ -70,15 +72,18 @@ Loop:
 
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds")
 
-	client, err := connectToMongo("mongodb://localhost:27017/")
-	if err != nil {
-		fmt.Println("Error occurred while trying to connect to MongoDB")
-		return
-	}
+	client := connectToMongo()
+	defer func(client *mongo.Client) {
+		err := client.Disconnect(context.TODO())
+		if err != nil {
+			_, err := fmt.Fprintln(os.Stderr, "Error while disconnecting client.")
+			if err != nil {
+				fmt.Println(err)
+			}
+		}
+	}(client)
 
 	booksCollection := client.Database("Mondadori").Collection("Books")
-	fmt.Println("Connected to MongoDB!")
-
 	booksToAdd, booksToUpdate := getBooksToAddAndUpdate(booksCollection, bookSet)
 
 	var mongoDBOperationsWG sync.WaitGroup
@@ -116,7 +121,7 @@ Loop:
 
 func getBooksToAddAndUpdate(booksCollection *mongo.Collection, booksMap map[BookFull]bool) ([]BookFull, []BookPartial) {
 	dbBooks := make(map[string]DBBook, 750000)
-	getAllDB(booksCollection, dbBooks)
+	getAllDBBooks(booksCollection, dbBooks)
 	var booksToAdd []BookFull
 	var booksToUpdate []BookPartial
 

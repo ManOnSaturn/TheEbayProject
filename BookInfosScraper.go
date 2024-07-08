@@ -70,8 +70,10 @@ func getBooks(booksChannel chan<- BookFull) {
 	for _, pageInfo := range pageInfos {
 		err = c.Visit(pageInfo.URL)
 		if err != nil {
-			fmt.Println("Error on visit:", err, "URL: ", pageInfo.URL)
-			return
+			_, err := fmt.Fprintln(os.Stderr, "Error on visit:", err, "URL: ", pageInfo.URL)
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 
@@ -87,10 +89,7 @@ func getBooks(booksChannel chan<- BookFull) {
 		element.ForEach("div.single-box", func(index int, element *colly.HTMLElement) {
 			bookURL := element.ChildAttr("a.link", "href")
 			bookAvailableText := element.ChildText("span.time")
-			bookAvailable := false
-			if bookAvailableText == "Disponibilità immediata" {
-				bookAvailable = true
-			}
+			bookAvailable := bookAvailableText == "Disponibilità immediata"
 			bookISBN := element.ChildAttr("div.info-data-product", "data-dimension8")
 			bookTitle := element.ChildAttr("div.info-data-product", "data-name")
 			bookPrice := element.ChildAttr("div.info-data-product", "data-metric3")
@@ -158,8 +157,10 @@ func getBooks(booksChannel chan<- BookFull) {
 	for _, URL := range URLList {
 		err := q.AddURL(URL)
 		if err != nil {
-			fmt.Println("Error on adding URL:", err)
-			return
+			_, err := fmt.Fprintln(os.Stderr, "Error on adding URL:", err)
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 
@@ -174,8 +175,7 @@ func getBooks(booksChannel chan<- BookFull) {
 	}
 	err = q.Run(c) // Blocking
 	if err != nil {
-		fmt.Println("Error on running: ", err)
-		return
+		panic(err)
 	}
 
 	c.Wait()

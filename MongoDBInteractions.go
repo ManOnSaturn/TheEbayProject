@@ -7,6 +7,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
+	"os"
+	"time"
 )
 
 type mongoDBBookDocument struct {
@@ -30,14 +32,21 @@ type mongoDBBookToUpdateDocument struct {
 	Available bool   `bson:"Available"`
 }
 
-func connectToMongo(uri string) (*mongo.Client, error) {
-	clientOptions := options.Client().ApplyURI(uri)
+func connectToMongo() *mongo.Client {
+	// "mongodb://localhost:27017/"
+	clientOptions := options.Client().ApplyURI("mongodb+srv://admin:wTajho41SAXpouc2@cluster0.pmtj7nf.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 	client, err := mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {
-		return nil, err
+		fmt.Println("Error occurred while trying to connect to MongoDB")
+		panic(err)
 	}
 
-	return client, nil
+	// Send a ping to confirm a successful connection
+	if err := client.Database("admin").RunCommand(context.TODO(), bson.D{{"ping", 1}}).Err(); err != nil {
+		panic(err)
+	}
+	fmt.Println("Pinged mongodb deployment. Successfully connected to MongoDB!")
+	return client
 }
 
 func insertBooks(coll *mongo.Collection, books []BookFull) {
@@ -60,9 +69,14 @@ func insertBooks(coll *mongo.Collection, books []BookFull) {
 		documents = append(documents, document)
 	}
 
-	_, err := coll.InsertMany(context.TODO(), documents)
-	if err != nil {
-		fmt.Println("Error occurred while inserting book documents in MongoDB", err, documents)
+	if len(documents) > 0 {
+		_, err := coll.InsertMany(context.TODO(), documents)
+		if err != nil {
+			_, err := fmt.Fprintln(os.Stderr, "Error occurred while inserting book documents in MongoDB", err, documents)
+			if err != nil {
+				return
+			}
+		}
 	}
 }
 
@@ -74,7 +88,10 @@ func insertBookToUpdate(coll *mongo.Collection, book BookPartial) {
 	}
 	_, err := coll.InsertOne(context.TODO(), document)
 	if err != nil {
-		fmt.Println("Error occurred while inserting partial book document in MongoDB", err, document)
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred while inserting book to update document in MongoDB", err, document)
+		if err != nil {
+			return
+		}
 	}
 }
 
@@ -93,7 +110,8 @@ func updateBookToUpdate(coll *mongo.Collection, book BookPartial) {
 	}
 }
 
-func getAllDB(coll *mongo.Collection, dbBooks map[string]DBBook) {
+func getAllDBBooks(coll *mongo.Collection, dbBooks map[string]DBBook) {
+	startTime := time.Now()
 	// Find all documents
 	cur, err := coll.Find(context.TODO(), bson.D{})
 	if err != nil {
@@ -114,4 +132,6 @@ func getAllDB(coll *mongo.Collection, dbBooks map[string]DBBook) {
 		}
 		dbBooks[result.ISBN] = DBBook{ISBN: result.ISBN, Available: result.Available, Price: result.Price, Found: false}
 	}
+	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
+
 }
