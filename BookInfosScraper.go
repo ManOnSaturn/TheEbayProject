@@ -83,7 +83,7 @@ func getBooks(booksChannel chan<- BookFull) {
 	c.OnHTMLDetach("li.item.word")
 
 	// Core logic: visit book pages and gather book details.
-	pageVisitedChan := make(chan struct{}, 5)
+	pageVisitedChan := make(chan struct{}, 10)
 	c.OnHTML("#div_container", func(element *colly.HTMLElement) {
 		pageVisitedChan <- struct{}{}
 		element.ForEach("div.single-box", func(index int, element *colly.HTMLElement) {
@@ -122,19 +122,6 @@ func getBooks(booksChannel chan<- BookFull) {
 		_ = response.Request.Retry()
 	})
 
-	// Wait for successfully visited pages and log timing.
-	numPageVisited := 0
-	lastTimeVisited := time.Now()
-	go func() {
-		for range pageVisitedChan {
-			numPageVisited++
-			if numPageVisited%100 == 0 {
-				fmt.Println("100 visited pages every", time.Now().Sub(lastTimeVisited))
-				lastTimeVisited = time.Now()
-			}
-		}
-	}()
-
 	// Wait for errored pages and log timing.
 	numPageErrored := 0
 	lastTimeError := time.Now()
@@ -164,10 +151,12 @@ func getBooks(booksChannel chan<- BookFull) {
 		}
 	}
 
-	size, _ := q.Size()
+	queueSize, _ := q.Size()
 
-	fmt.Println("Running queue of request of size: ", size)
-	if size > maxQueueSize-1000 {
+	go logVisitedPages(pageVisitedChan, queueSize)
+
+	fmt.Println("Running queue of request of size: ", queueSize)
+	if queueSize > maxQueueSize-1000 {
 		_, err := fmt.Fprintln(os.Stderr, "Increase running queue size before it's too late!")
 		if err != nil {
 			fmt.Println("Error on using Fprintln on stderr:", err)
@@ -179,6 +168,26 @@ func getBooks(booksChannel chan<- BookFull) {
 	}
 
 	c.Wait()
+}
+
+func logVisitedPages(pageVisitedChan chan struct{}, queueSize int) {
+	numPageVisited := 0
+	lastPageVisited := 0
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case _, ok := <-pageVisitedChan:
+			if !ok {
+				return
+			}
+			numPageVisited++
+		case <-ticker.C:
+			fmt.Println(numPageVisited-lastPageVisited, "/s.", numPageVisited, "/", queueSize, (numPageVisited/queueSize)*100, "%")
+			lastPageVisited = numPageVisited
+		}
+	}
 }
 
 // Shuffle shuffles the elements of a slice
