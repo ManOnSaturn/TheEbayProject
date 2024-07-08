@@ -173,7 +173,8 @@ func getBooks(booksChannel chan<- BookFull) {
 func logVisitedPages(pageVisitedChan chan struct{}, queueSize int) {
 	numPageVisited := 0
 	lastPageVisited := 0
-	ticker := time.NewTicker(5 * time.Second)
+	seconds := 5
+	ticker := time.NewTicker(time.Duration(seconds) * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -184,7 +185,8 @@ func logVisitedPages(pageVisitedChan chan struct{}, queueSize int) {
 			}
 			numPageVisited++
 		case <-ticker.C:
-			fmt.Println(numPageVisited-lastPageVisited, "/s.", numPageVisited, "/", queueSize, (numPageVisited/queueSize)*100, "%")
+			percentage := (float64(numPageVisited) / float64(queueSize)) * 100
+			fmt.Printf("%d/%ds. %d/%d (%.2f%%)\n", numPageVisited-lastPageVisited, seconds, numPageVisited, queueSize, percentage)
 			lastPageVisited = numPageVisited
 		}
 	}
