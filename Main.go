@@ -42,6 +42,7 @@ type BookFull struct {
 func main() {
 	startTime := time.Now()
 
+	// This chanel is getting closed by the function using it, when it ends
 	booksChannel := make(chan BookFull, 500)
 	var wg sync.WaitGroup
 
@@ -49,6 +50,7 @@ func main() {
 		defer wg.Done()
 		wg.Add(1)
 		getBooks(booksChannel)
+		fmt.Println("[DEBUG] Went after getBooks.")
 	}()
 
 	go func() {

@@ -74,7 +74,7 @@ func insertBooks(coll *mongo.Collection, books []BookFull) {
 		if err != nil {
 			_, err := fmt.Fprintln(os.Stderr, "Error occurred while inserting book documents in MongoDB", err, documents)
 			if err != nil {
-				return
+				panic(err)
 			}
 		}
 	}
@@ -90,13 +90,13 @@ func insertBookToUpdate(coll *mongo.Collection, book BookPartial) {
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred while inserting book to update document in MongoDB", err, document)
 		if err != nil {
-			return
+			panic(err)
 		}
 	}
 }
 
 func updateBookToUpdate(coll *mongo.Collection, book BookPartial) {
-	filter := bson.M{"isbn": book.ISBN}
+	filter := bson.M{"ISBN": book.ISBN}
 	update := bson.M{
 		"$set": bson.M{
 			"Price":     book.Price,
@@ -106,7 +106,10 @@ func updateBookToUpdate(coll *mongo.Collection, book BookPartial) {
 
 	result := coll.FindOneAndUpdate(context.TODO(), filter, update)
 	if result.Err() != nil {
-		fmt.Println("Error occurred while updating partial book document in MongoDB", result.Err(), filter, update)
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred while updating partial book document in MongoDB", result.Err(), filter, update)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -128,8 +131,12 @@ func getAllDBBooks(coll *mongo.Collection, dbBooks map[string]DBBook) {
 		var result mongoDBBookDocument
 		err := cur.Decode(&result)
 		if err != nil {
-			fmt.Println("Error occurred while decoding result", err)
+			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
+			if err != nil {
+				panic(err)
+			}
 		}
+
 		dbBooks[result.ISBN] = DBBook{ISBN: result.ISBN, Available: result.Available, Price: result.Price, Found: false}
 	}
 	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")

@@ -19,6 +19,7 @@ type MondadoriPageInfo struct {
 }
 
 func getBooks(booksChannel chan<- BookFull) {
+	defer close(booksChannel)
 	var err error
 	pageInfos := []MondadoriPageInfo{
 		{URL: "https://www.mondadoristore.it/libri/italiani/Ambiente-e-Animali/genG001/"},
@@ -119,6 +120,7 @@ func getBooks(booksChannel chan<- BookFull) {
 	pageErroredChan := make(chan struct{}, 5)
 	c.OnError(func(response *colly.Response, err error) {
 		pageErroredChan <- struct{}{}
+		fmt.Println("Page visit errored", err)
 		_ = response.Request.Retry()
 	})
 
@@ -128,10 +130,8 @@ func getBooks(booksChannel chan<- BookFull) {
 	go func() {
 		for range pageErroredChan {
 			numPageErrored++
-			if numPageErrored%1 == 0 {
-				fmt.Println("1 error every", time.Now().Sub(lastTimeError))
-				lastTimeError = time.Now()
-			}
+			fmt.Println("Error every", time.Now().Sub(lastTimeError))
+			lastTimeError = time.Now()
 		}
 	}()
 
@@ -159,7 +159,7 @@ func getBooks(booksChannel chan<- BookFull) {
 	if queueSize > maxQueueSize-1000 {
 		_, err := fmt.Fprintln(os.Stderr, "Increase running queue size before it's too late!")
 		if err != nil {
-			fmt.Println("Error on using Fprintln on stderr:", err)
+			panic(err)
 		}
 	}
 	err = q.Run(c) // Blocking
