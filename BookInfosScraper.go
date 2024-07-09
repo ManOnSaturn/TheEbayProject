@@ -19,7 +19,6 @@ type MondadoriPageInfo struct {
 }
 
 func getBooks(booksChannel chan<- BookFull) {
-	defer close(booksChannel)
 	var err error
 	pageInfos := []MondadoriPageInfo{
 		{URL: "https://www.mondadoristore.it/libri/italiani/Ambiente-e-Animali/genG001/"},
@@ -85,6 +84,7 @@ func getBooks(booksChannel chan<- BookFull) {
 
 	// Core logic: visit book pages and gather book details.
 	pageVisitedChan := make(chan struct{}, 10)
+	defer close(pageVisitedChan)
 	c.OnHTML("#div_container", func(element *colly.HTMLElement) {
 		pageVisitedChan <- struct{}{}
 		element.ForEach("div.single-box", func(index int, element *colly.HTMLElement) {
