@@ -108,6 +108,10 @@ func bulkInsertBooksToUpdate(coll *mongo.Collection, books []*BookPartial) {
 }
 
 func bulkUpdateBooks(coll *mongo.Collection, books []*BookPartial) {
+	if len(books) == 0 {
+		return
+	}
+
 	var models []mongo.WriteModel
 
 	for _, book := range books {
