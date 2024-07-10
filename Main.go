@@ -142,7 +142,7 @@ func getBooksToAddAndUpdate(booksCollection *mongo.Collection, scrapedBooksSet m
 	// If a database book has not been touched when going through all the books previously found on Mondadori,
 	// it means we have lost track of it, and we mark it as unavailable.
 	for _, book := range dbBooks {
-		if !book.Found {
+		if !book.Found && book.Available {
 			booksToUpdate = append(booksToUpdate, BookPartial{ISBN: book.ISBN, Price: book.Price, Available: false})
 		}
 	}
