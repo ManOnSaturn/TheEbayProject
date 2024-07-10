@@ -42,7 +42,6 @@ type BookFull struct {
 func main() {
 	startTime := time.Now()
 
-	// This chanel is getting closed by the function using it, when it ends
 	booksChannel := make(chan BookFull, 500)
 	var wg sync.WaitGroup
 
@@ -72,7 +71,7 @@ Loop:
 		}
 	}
 
-	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds")
+	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
 
 	client := connectToMongo()
 	defer func(client *mongo.Client) {
@@ -94,44 +93,43 @@ Loop:
 	go func() {
 		defer mongoDBOperationsWG.Done()
 		insertBooks(booksCollection, booksToAdd)
-		fmt.Println("Finished inserting books in Books DB")
+		fmt.Println("Finished inserting new books in DB.")
 	}()
-
-	mongoDBOperationsWG.Wait()
 
 	booksToUpdateCollection := client.Database("Mondadori").Collection("BooksToUpdate")
 
-	mongoDBOperationsWG.Add(1)
-	go func() {
-		defer mongoDBOperationsWG.Done()
-		for _, bookToUpdate := range booksToUpdate {
-			if bookToUpdate.Published {
-				// If it's published, it needs handling on the python side.
-				insertBookToUpdate(booksToUpdateCollection, bookToUpdate)
-			} else {
-				// Else, we just put the updated info in the main collection.
-				updateBookToUpdate(booksCollection, bookToUpdate)
-			}
+	var booksToBulkUpdate []*BookPartial
+	var booksToBulkInsert []*BookPartial
+	for _, bookToUpdate := range booksToUpdate {
+		if bookToUpdate.Published {
+			// If it's published, it needs handling on the python side.
+			booksToBulkInsert = append(booksToBulkInsert, &bookToUpdate)
+		} else {
+			// Else, we just put the updated info in the main collection.
+			booksToBulkUpdate = append(booksToBulkUpdate, &bookToUpdate)
 		}
-		fmt.Println("Finished inserting books in BooksToUpdate DB")
-	}()
+	}
 
 	mongoDBOperationsWG.Wait()
+	bulkUpdateBooks(booksCollection, booksToBulkUpdate)
+	fmt.Println("Finished updating books in DB.")
+	bulkInsertBooksToUpdate(booksToUpdateCollection, booksToBulkInsert)
+	fmt.Println("Finished inserting books to update in DB.")
 
-	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds")
+	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")
 }
 
-func getBooksToAddAndUpdate(booksCollection *mongo.Collection, booksMap map[BookFull]bool) ([]BookFull, []BookPartial) {
+func getBooksToAddAndUpdate(booksCollection *mongo.Collection, scrapedBooksSet map[BookFull]bool) ([]*BookFull, []BookPartial) {
 	dbBooks := make(map[string]DBBook, 750000)
 	getAllDBBooks(booksCollection, dbBooks)
-	var booksToAdd []BookFull
+	var booksToAdd []*BookFull
 	var booksToUpdate []BookPartial
 
-	fmt.Println("Creating lists of books to create and books to update")
-	for bookInfo := range booksMap {
+	fmt.Println("Creating lists of books to create and books to update.")
+	for bookInfo := range scrapedBooksSet {
 		bookFromDB, ok := dbBooks[bookInfo.ISBN]
 		if !ok {
-			booksToAdd = append(booksToAdd, bookInfo)
+			booksToAdd = append(booksToAdd, &bookInfo)
 		} else {
 			bookFromDB.Found = true
 			dbBooks[bookFromDB.ISBN] = bookFromDB

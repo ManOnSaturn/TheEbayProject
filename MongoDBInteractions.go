@@ -49,7 +49,11 @@ func connectToMongo() *mongo.Client {
 	return client
 }
 
-func insertBooks(coll *mongo.Collection, books []BookFull) {
+func insertBooks(coll *mongo.Collection, books []*BookFull) {
+	if len(books) == 0 {
+		return
+	}
+
 	var documents []interface{}
 	for _, book := range books {
 		document := mongoDBBookDocument{
@@ -69,47 +73,60 @@ func insertBooks(coll *mongo.Collection, books []BookFull) {
 		documents = append(documents, document)
 	}
 
-	if len(documents) > 0 {
-		_, err := coll.InsertMany(context.TODO(), documents)
-		if err != nil {
-			_, err := fmt.Fprintln(os.Stderr, "Error occurred while inserting book documents in MongoDB", err, documents)
-			if err != nil {
-				panic(err)
-			}
-		}
-	}
-}
-
-func insertBookToUpdate(coll *mongo.Collection, book BookPartial) {
-	document := mongoDBBookToUpdateDocument{
-		ISBN:      book.ISBN,
-		Price:     book.Price,
-		Available: book.Available,
-	}
-	_, err := coll.InsertOne(context.TODO(), document)
+	_, err := coll.InsertMany(context.TODO(), documents)
 	if err != nil {
-		_, err := fmt.Fprintln(os.Stderr, "Error occurred while inserting book to update document in MongoDB", err, document)
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred while inserting book documents in MongoDB", err, documents)
+		if err != nil {
+			panic(err)
+		}
+
+	}
+}
+
+func bulkInsertBooksToUpdate(coll *mongo.Collection, books []*BookPartial) {
+	if len(books) == 0 {
+		return
+	}
+
+	var documents []interface{}
+	for _, book := range books {
+		document := mongoDBBookToUpdateDocument{
+			ISBN:      book.ISBN,
+			Price:     book.Price,
+			Available: book.Available,
+		}
+		documents = append(documents, document)
+	}
+
+	_, err := coll.InsertMany(context.TODO(), documents)
+	if err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred while inserting books to update in MongoDB", err, documents)
 		if err != nil {
 			panic(err)
 		}
 	}
 }
 
-func updateBookToUpdate(coll *mongo.Collection, book BookPartial) {
-	filter := bson.M{"ISBN": book.ISBN}
-	update := bson.M{
-		"$set": bson.M{
-			"Price":     book.Price,
-			"Available": book.Available,
-		},
+func bulkUpdateBooks(coll *mongo.Collection, books []*BookPartial) {
+	var models []mongo.WriteModel
+
+	for _, book := range books {
+		filter := bson.M{"ISBN": book.ISBN}
+		update := bson.M{
+			"$set": bson.M{
+				"Price":     book.Price,
+				"Available": book.Available,
+			},
+		}
+		model := mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update)
+		models = append(models, model)
 	}
 
-	result := coll.FindOneAndUpdate(context.TODO(), filter, update)
-	if result.Err() != nil {
-		_, err := fmt.Fprintln(os.Stderr, "Error occurred while updating partial book document in MongoDB", result.Err(), filter, update)
-		if err != nil {
-			panic(err)
-		}
+	bulkOption := options.BulkWrite().SetOrdered(false)
+	_, err := coll.BulkWrite(context.TODO(), models, bulkOption)
+	if err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk update operation:", err)
+		panic(err)
 	}
 }
 
@@ -123,7 +140,8 @@ func getAllDBBooks(coll *mongo.Collection, dbBooks map[string]DBBook) {
 	defer func(cur *mongo.Cursor, ctx context.Context) {
 		err := cur.Close(ctx)
 		if err != nil {
-			fmt.Println("Error occurred while closing cursor", err)
+			_, err := fmt.Fprintln(os.Stderr, "Error occurred while closing cursor", err)
+			panic(err)
 		}
 	}(cur, context.TODO())
 

@@ -124,17 +124,6 @@ func getBooks(booksChannel chan<- BookFull) {
 		_ = response.Request.Retry()
 	})
 
-	// Wait for errored pages and log timing.
-	numPageErrored := 0
-	lastTimeError := time.Now()
-	go func() {
-		for range pageErroredChan {
-			numPageErrored++
-			fmt.Println("Error every", time.Now().Sub(lastTimeError))
-			lastTimeError = time.Now()
-		}
-	}()
-
 	const maxQueueSize = 40000
 	q, _ := queue.New(60, &queue.InMemoryQueueStorage{MaxSize: maxQueueSize})
 
@@ -154,6 +143,17 @@ func getBooks(booksChannel chan<- BookFull) {
 	queueSize, _ := q.Size()
 
 	go logVisitedPages(pageVisitedChan, queueSize)
+	// Wait for errored pages and log timing.
+	numPageErrored := 0
+	lastTimeError := time.Now()
+	go func() {
+		for range pageErroredChan {
+			numPageErrored++
+			fmt.Println("Error every", time.Now().Sub(lastTimeError))
+			lastTimeError = time.Now()
+		}
+		fmt.Println(numPageErrored, "errored pages.")
+	}()
 
 	fmt.Println("Running queue of request of size: ", queueSize)
 	if queueSize > maxQueueSize-1000 {
@@ -181,6 +181,7 @@ func logVisitedPages(pageVisitedChan chan struct{}, queueSize int) {
 		select {
 		case _, ok := <-pageVisitedChan:
 			if !ok {
+				fmt.Printf("Pages visited %d/%d.\n", numPageVisited, queueSize)
 				return
 			}
 			numPageVisited++
