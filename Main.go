@@ -54,21 +54,14 @@ func main() {
 
 	go func() {
 		wg.Wait()
+		fmt.Println("[DEBUG] Closing channel.")
 		close(booksChannel)
 	}()
 
 	bookSet := make(map[BookFull]bool, 750000)
 
-Loop:
-	for {
-		select {
-		// Wait for all URLs to be gathered before closing the channel
-		case bookInfo, ok := <-booksChannel:
-			if !ok {
-				break Loop
-			}
-			bookSet[bookInfo] = true
-		}
+	for bookInfo := range booksChannel {
+		bookSet[bookInfo] = true
 	}
 
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
@@ -98,6 +91,7 @@ Loop:
 
 	booksToUpdateCollection := client.Database("Mondadori").Collection("BooksToUpdate")
 
+	startTimeFor := time.Now()
 	var booksToBulkUpdate []*BookPartial
 	var booksToBulkInsert []*BookPartial
 	for _, bookToUpdate := range booksToUpdate {
@@ -109,6 +103,7 @@ Loop:
 			booksToBulkUpdate = append(booksToBulkUpdate, &bookToUpdate)
 		}
 	}
+	fmt.Println("Finished creating arrays of documents in", time.Since(startTimeFor).Seconds(), "seconds.")
 
 	mongoDBOperationsWG.Wait()
 	bulkUpdateBooks(booksCollection, booksToBulkUpdate)
@@ -126,6 +121,7 @@ func getBooksToAddAndUpdate(booksCollection *mongo.Collection, scrapedBooksSet m
 	var booksToUpdate []BookPartial
 
 	fmt.Println("Creating lists of books to create and books to update.")
+	startTime := time.Now()
 	for bookInfo := range scrapedBooksSet {
 		bookFromDB, ok := dbBooks[bookInfo.ISBN]
 		if !ok {
@@ -148,5 +144,6 @@ func getBooksToAddAndUpdate(booksCollection *mongo.Collection, scrapedBooksSet m
 	}
 
 	fmt.Println(len(booksToAdd), "books to add.", len(booksToUpdate), "books to update.")
+	fmt.Println("Finished creating lists of books to add and update in DB in", time.Since(startTime).Seconds(), "seconds.")
 	return booksToAdd, booksToUpdate
 }
