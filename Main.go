@@ -43,20 +43,8 @@ func main() {
 	startTime := time.Now()
 
 	booksChannel := make(chan BookFull, 500)
-	var wg sync.WaitGroup
 
-	go func() {
-		defer wg.Done()
-		wg.Add(1)
-		getBooks(booksChannel)
-		fmt.Println("[DEBUG] Went after getBooks.")
-	}()
-
-	go func() {
-		wg.Wait()
-		fmt.Println("[DEBUG] Closing channel.")
-		close(booksChannel)
-	}()
+	go getBooks(booksChannel)
 
 	bookSet := make(map[BookFull]bool, 750000)
 

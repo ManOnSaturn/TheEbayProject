@@ -170,6 +170,7 @@ func getBooks(booksChannel chan<- BookFull) {
 
 	c.Wait()
 	fmt.Println("[DEBUG] After c.Wait")
+	close(booksChannel)
 }
 
 func logVisitedPages(pageVisitedChan chan struct{}, queueSize int) {
