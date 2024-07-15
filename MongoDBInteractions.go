@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
@@ -12,18 +13,19 @@ import (
 )
 
 type mongoDBBookDocument struct {
-	ISBN      string `bson:"ISBN"`
-	Published bool   `bson:"Published"`
-	Title     string `bson:"Title"`
-	Available bool   `bson:"Available"`
-	Price     string `bson:"Price"`
-	URL       string `bson:"URL"`
-	ImageURL  string `bson:"ImageURL"`
-	Author    string `bson:"Author"`
-	Category  string `bson:"Category"`
-	Editor    string `bson:"Editor"`
-	Variant   string `bson:"Variant"`
-	Language  string `bson:"Language"`
+	ISBN      string             `bson:"ISBN"`
+	Published bool               `bson:"Published"`
+	Title     string             `bson:"Title"`
+	Available bool               `bson:"Available"`
+	Price     string             `bson:"Price"`
+	URL       string             `bson:"URL"`
+	ImageURL  string             `bson:"ImageURL"`
+	Author    string             `bson:"Author"`
+	Category  string             `bson:"Category"`
+	Editor    string             `bson:"Editor"`
+	Variant   string             `bson:"Variant"`
+	Language  string             `bson:"Language"`
+	UpdatedAt primitive.DateTime `bson:"UpdatedAt"`
 }
 
 type mongoDBBookToUpdateDocument struct {
@@ -33,8 +35,7 @@ type mongoDBBookToUpdateDocument struct {
 }
 
 func connectToMongo() *mongo.Client {
-	// "mongodb://localhost:27017/"
-	clientOptions := options.Client().ApplyURI("mongodb+srv://admin:wTajho41SAXpouc2@cluster0.pmtj7nf.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017/")
 	client, err := mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {
 		fmt.Println("Error occurred while trying to connect to MongoDB")
@@ -53,6 +54,7 @@ func insertBooks(coll *mongo.Collection, books []*BookFull) {
 	if len(books) == 0 {
 		return
 	}
+	nowTime := time.Now()
 
 	var documents []interface{}
 	for _, book := range books {
@@ -69,6 +71,7 @@ func insertBooks(coll *mongo.Collection, books []*BookFull) {
 			Editor:    book.Editor,
 			Variant:   book.Variant,
 			Language:  book.Language,
+			UpdatedAt: primitive.NewDateTimeFromTime(nowTime),
 		}
 		documents = append(documents, document)
 	}
@@ -113,13 +116,14 @@ func bulkUpdateBooks(coll *mongo.Collection, books []*BookPartial) {
 	}
 
 	var models []mongo.WriteModel
-
+	nowTime := time.Now()
 	for _, book := range books {
 		filter := bson.M{"ISBN": book.ISBN}
 		update := bson.M{
 			"$set": bson.M{
 				"Price":     book.Price,
 				"Available": book.Available,
+				"UpdatedAt": primitive.NewDateTimeFromTime(nowTime),
 			},
 		}
 		model := mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update)

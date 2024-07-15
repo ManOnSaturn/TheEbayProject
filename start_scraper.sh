@@ -2,7 +2,7 @@
 
 current_datetime=$(date '+%H-%M')
 
-output_dir="/home/pi/ebay/logs"
+output_dir="/home/mattia/ebay/logs"
 
 mkdir -p "$output_dir"
 
@@ -12,6 +12,6 @@ if [ -f "$output_file" ]; then
     rm "$output_file"
 fi
 
-python_script="/home/pi/ebay/send_error.py"
+python_script="/home/mattia/ebay/send_error.py"
 
-/home/pi/ebay/Scraper > "$output_file" 2> >(tee -a "$output_file" | python3 "$python_script")
+/home/mattia/ebay/Scraper > "$output_file" 2> >(tee -a "$output_file" | python3 "$python_script")
