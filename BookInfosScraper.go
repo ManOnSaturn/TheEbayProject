@@ -66,6 +66,10 @@ func getBooks(booksChannel chan<- BookFull) {
 			}
 		}
 	})
+	c.OnError(func(response *colly.Response, err error) {
+		fmt.Println("Category page visit errored", err)
+		_ = response.Request.Retry()
+	})
 
 	for _, pageInfo := range pageInfos {
 		err = c.Visit(pageInfo.URL)
