@@ -141,7 +141,7 @@ func bulkUpdateBooks(coll *mongo.Collection, books []*BookPartial) {
 func getAllDBBooks(coll *mongo.Collection, dbBooks map[string]DBBook) {
 	startTime := time.Now()
 	// Find all documents
-	cur, err := coll.Find(context.TODO(), bson.D{{"ISBN", 1}})
+	cur, err := coll.Find(context.TODO(), bson.D{{"ISBN", bson.D{{"$exists", true}}}})
 	if err != nil {
 		log.Fatal(err)
 	}
