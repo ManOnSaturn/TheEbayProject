@@ -1,5 +1,11 @@
 #!/bin/bash
 
+LOCKFILE="/var/lock/my_script.lock"
+
+# Acquire the lock
+exec 200>"$LOCKFILE"
+flock -n 200 || { echo "Script is already running"; exit 1; }
+
 current_datetime=$(date '+%H-%M')
 
 output_dir="/home/mattia/ebay/logs"
@@ -15,3 +21,7 @@ fi
 python_script="/home/mattia/ebay/send_error.py"
 
 /home/mattia/ebay/Scraper > "$output_file" 2> >(tee -a "$output_file" | python3 "$python_script")
+
+# Release the lock
+flock -u 200
+rm -f "$LOCKFILE"

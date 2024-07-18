@@ -41,6 +41,19 @@ type BookFull struct {
 
 func main() {
 	startTime := time.Now()
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
+	defer cancel()
+	scrapingFinishedChannel := make(chan bool)
+
+	go func() {
+		select {
+		case <-scrapingFinishedChannel:
+			cancel()
+		case <-ctx.Done():
+			panic("Scraping timed out")
+		}
+	}()
 
 	booksChannel := make(chan BookFull, 500)
 
@@ -52,6 +65,7 @@ func main() {
 		bookSet[bookInfo] = true
 	}
 
+	scrapingFinishedChannel <- true
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
 
 	client := connectToMongo()
