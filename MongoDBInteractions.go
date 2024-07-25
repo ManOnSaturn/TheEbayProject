@@ -28,12 +28,6 @@ type mongoDBBookDocument struct {
 	UpdatedAt primitive.DateTime `bson:"UpdatedAt"`
 }
 
-type mongoDBBookToUpdateDocument struct {
-	ISBN      string `bson:"ISBN"`
-	Price     string `bson:"Price"`
-	Available bool   `bson:"Available"`
-}
-
 func connectToMongo() *mongo.Client {
 	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017/")
 	client, err := mongo.Connect(context.TODO(), clientOptions)
