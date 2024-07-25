@@ -20,7 +20,7 @@ fi
 
 python_script="/home/mattia/ebay/send_error.py"
 
-/home/mattia/ebay/Scraper > "$output_file" 2> >(tee -a "$output_file" | python3 "$python_script")
+/home/mattia/ebay/Scraper --fullScrape > "$output_file" 2> >(tee -a "$output_file" | python3 "$python_script")
 
 # Release the lock
 flock -u 200

@@ -14,6 +14,7 @@ type BookPartial struct {
 	Published bool
 	Price     string
 	Available bool
+	URL       string
 }
 
 type DBBook struct {
@@ -21,7 +22,7 @@ type DBBook struct {
 	Published bool
 	Available bool
 	Price     string
-	Found     bool
+	URL       string
 }
 
 type BookFull struct {
@@ -41,6 +42,22 @@ type BookFull struct {
 
 func main() {
 	startTime := time.Now()
+
+	if os.Args[1] == "--fullScrape" {
+		fullScraping()
+	}
+	if os.Args[1] == "--repricer" {
+		repricer()
+	}
+
+	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")
+}
+
+func repricer() {}
+
+func fullScraping() {
+	startTime := time.Now()
+
 	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 	defer cancel()
@@ -55,7 +72,7 @@ func main() {
 		}
 	}()
 
-	booksChannel := make(chan BookFull, 500)
+	booksChannel := make(chan BookFull, 60)
 
 	go getBooks(booksChannel)
 
@@ -91,57 +108,27 @@ func main() {
 		fmt.Println("Finished inserting new books in DB.")
 	}()
 
-	booksToUpdateCollection := client.Database("Mondadori").Collection("BooksToUpdate")
-
-	startTimeFor := time.Now()
-	var booksToBulkUpdate []*BookPartial
-	var booksToBulkInsert []*BookPartial
-	for _, bookToUpdate := range booksToUpdate {
-		if bookToUpdate.Published {
-			// If it's published, it needs handling on the python side.
-			booksToBulkInsert = append(booksToBulkInsert, &bookToUpdate)
-		} else {
-			// Else, we just put the updated info in the main collection.
-			booksToBulkUpdate = append(booksToBulkUpdate, &bookToUpdate)
-		}
-	}
-	fmt.Println("Finished creating arrays of documents in", time.Since(startTimeFor).Seconds(), "seconds.")
-
 	mongoDBOperationsWG.Wait()
-	bulkUpdateBooks(booksCollection, booksToBulkUpdate)
+	bulkUpdateBooks(booksCollection, booksToUpdate)
 	fmt.Println("Finished updating books in DB.")
-	bulkInsertBooksToUpdate(booksToUpdateCollection, booksToBulkInsert)
-	fmt.Println("Finished inserting books to update in DB.")
-
-	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")
 }
 
-func getBooksToAddAndUpdate(booksCollection *mongo.Collection, scrapedBooksSet map[BookFull]bool) ([]*BookFull, []BookPartial) {
-	dbBooks := make(map[string]DBBook, 750000)
+func getBooksToAddAndUpdate(booksCollection *mongo.Collection, scrapedBooksSet map[BookFull]bool) ([]*BookFull, []*BookFull) {
+	dbBooks := make(map[string]BookFull, 750000)
 	getAllDBBooks(booksCollection, dbBooks)
 	var booksToAdd []*BookFull
-	var booksToUpdate []BookPartial
+	var booksToUpdate []*BookFull
 
 	fmt.Println("Creating lists of books to create and books to update.")
 	startTime := time.Now()
 	for bookInfo := range scrapedBooksSet {
 		bookFromDB, ok := dbBooks[bookInfo.ISBN]
 		if !ok {
+			// If the book ISBN from the scraped books set is not in the DB, then add the book to the DB
 			booksToAdd = append(booksToAdd, &bookInfo)
-		} else {
-			bookFromDB.Found = true
-			dbBooks[bookFromDB.ISBN] = bookFromDB
-			// Add book to the list of books to update if either availability or price change.
-			if bookFromDB.Available != bookInfo.Available || bookFromDB.Price != bookInfo.Price {
-				booksToUpdate = append(booksToUpdate, BookPartial{ISBN: bookFromDB.ISBN, Published: bookFromDB.Published, Price: bookInfo.Price, Available: bookInfo.Available})
-			}
-		}
-	}
-	// If a database book has not been touched when going through all the books previously found on Mondadori,
-	// it means we have lost track of it, and we mark it as unavailable.
-	for _, book := range dbBooks {
-		if !book.Found && book.Available {
-			booksToUpdate = append(booksToUpdate, BookPartial{ISBN: book.ISBN, Price: book.Price, Available: false})
+		} else if !bookInfo.Published && bookFromDB != bookInfo {
+			// Else if the scraped book is in the DB, it's unpublished from us, and it has some differences, update it
+			booksToUpdate = append(booksToUpdate, &bookInfo)
 		}
 	}
 

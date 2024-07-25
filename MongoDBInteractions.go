@@ -32,6 +32,7 @@ type mongoDBBookToUpdateDocument struct {
 	ISBN      string `bson:"ISBN"`
 	Price     string `bson:"Price"`
 	Available bool   `bson:"Available"`
+	URL       string `bson:"URL"`
 }
 
 func connectToMongo() *mongo.Client {
@@ -97,6 +98,7 @@ func bulkInsertBooksToUpdate(coll *mongo.Collection, books []*BookPartial) {
 			ISBN:      book.ISBN,
 			Price:     book.Price,
 			Available: book.Available,
+			URL:       book.URL,
 		}
 		documents = append(documents, document)
 	}
@@ -110,7 +112,7 @@ func bulkInsertBooksToUpdate(coll *mongo.Collection, books []*BookPartial) {
 	}
 }
 
-func bulkUpdateBooks(coll *mongo.Collection, books []*BookPartial) {
+func bulkUpdateBooks(coll *mongo.Collection, books []*BookFull) {
 	if len(books) == 0 {
 		return
 	}
@@ -121,8 +123,18 @@ func bulkUpdateBooks(coll *mongo.Collection, books []*BookPartial) {
 		filter := bson.M{"ISBN": book.ISBN}
 		update := bson.M{
 			"$set": bson.M{
-				"Price":     book.Price,
+				"ISBN":      book.ISBN,
+				"Published": false,
+				"Title":     book.Title,
 				"Available": book.Available,
+				"Price":     book.Price,
+				"URL":       book.URL,
+				"ImageURL":  book.ImageURL,
+				"Author":    book.Author,
+				"Category":  book.Category,
+				"Editor":    book.Editor,
+				"Variant":   book.Variant,
+				"Language":  book.Language,
 				"UpdatedAt": primitive.NewDateTimeFromTime(nowTime),
 			},
 		}
@@ -138,7 +150,7 @@ func bulkUpdateBooks(coll *mongo.Collection, books []*BookPartial) {
 	}
 }
 
-func getAllDBBooks(coll *mongo.Collection, dbBooks map[string]DBBook) {
+func getAllDBBooks(coll *mongo.Collection, dbBooks map[string]BookFull) {
 	startTime := time.Now()
 	// Find all documents
 	cur, err := coll.Find(context.TODO(), bson.D{{"ISBN", bson.D{{"$exists", true}}}})
@@ -163,8 +175,10 @@ func getAllDBBooks(coll *mongo.Collection, dbBooks map[string]DBBook) {
 			}
 		}
 
-		dbBooks[result.ISBN] = DBBook{ISBN: result.ISBN, Available: result.Available, Price: result.Price, Found: false}
+		dbBooks[result.ISBN] = BookFull{ISBN: result.ISBN, Published: result.Published, Title: result.Title,
+			Available: result.Available, Price: result.Price, URL: result.URL, ImageURL: result.ImageURL,
+			Author: result.Author, Category: result.Category, Variant: result.Variant, Editor: result.Editor,
+			Language: result.Language}
 	}
 	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
-
 }
