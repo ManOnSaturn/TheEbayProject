@@ -32,7 +32,6 @@ type mongoDBBookToUpdateDocument struct {
 	ISBN      string `bson:"ISBN"`
 	Price     string `bson:"Price"`
 	Available bool   `bson:"Available"`
-	URL       string `bson:"URL"`
 }
 
 func connectToMongo() *mongo.Client {
@@ -98,7 +97,6 @@ func bulkInsertBooksToUpdate(coll *mongo.Collection, books []*BookPartial) {
 			ISBN:      book.ISBN,
 			Price:     book.Price,
 			Available: book.Available,
-			URL:       book.URL,
 		}
 		documents = append(documents, document)
 	}
@@ -154,6 +152,39 @@ func getAllDBBooks(coll *mongo.Collection, dbBooks map[string]BookFull) {
 	startTime := time.Now()
 	// Find all documents
 	cur, err := coll.Find(context.TODO(), bson.D{{"ISBN", bson.D{{"$exists", true}}}})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(cur *mongo.Cursor, ctx context.Context) {
+		err := cur.Close(ctx)
+		if err != nil {
+			_, err := fmt.Fprintln(os.Stderr, "Error occurred while closing cursor", err)
+			panic(err)
+		}
+	}(cur, context.TODO())
+
+	for cur.Next(context.TODO()) {
+		var result mongoDBBookDocument
+		err := cur.Decode(&result)
+		if err != nil {
+			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		dbBooks[result.ISBN] = BookFull{ISBN: result.ISBN, Published: result.Published, Title: result.Title,
+			Available: result.Available, Price: result.Price, URL: result.URL, ImageURL: result.ImageURL,
+			Author: result.Author, Category: result.Category, Variant: result.Variant, Editor: result.Editor,
+			Language: result.Language}
+	}
+	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
+}
+
+func getAllPublishedBooks(coll *mongo.Collection, dbBooks map[string]BookFull) {
+	startTime := time.Now()
+	// Find all documents
+	cur, err := coll.Find(context.TODO(), bson.D{{"Published", true}})
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -1,6 +1,11 @@
 #!/bin/bash
 
-LOCKFILE="/var/lock/my_script.lock"
+if [ $# -lt 1 ]; then
+    echo "You forgot the add a first parameter."
+    exit 1
+fi
+
+LOCKFILE="/var/lock/scraper_$1.lock"
 
 # Acquire the lock
 exec 200>"$LOCKFILE"
@@ -20,7 +25,7 @@ fi
 
 python_script="/home/mattia/ebay/send_error.py"
 
-/home/mattia/ebay/Scraper --fullScrape > "$output_file" 2> >(tee -a "$output_file" | python3 "$python_script")
+/home/mattia/ebay/Scraper $1 > "$output_file" 2> >(tee -a "$output_file" | python3 "$python_script")
 
 # Release the lock
 flock -u 200

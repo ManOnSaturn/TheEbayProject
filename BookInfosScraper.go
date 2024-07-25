@@ -68,18 +68,7 @@ func getBooks(booksChannel chan<- BookFull) {
 	})
 	pageErroredChan := make(chan struct{}, 5)
 	defer close(pageErroredChan)
-
-	// Wait for errored pages and log timing.
-	numPageErrored := 0
-	lastTimeError := time.Now()
-	go func() {
-		for range pageErroredChan {
-			numPageErrored++
-			fmt.Println("Error every", time.Now().Sub(lastTimeError))
-			lastTimeError = time.Now()
-		}
-		fmt.Println(numPageErrored, "errored pages.")
-	}()
+	go logErroredPages(pageErroredChan)
 
 	c.OnError(func(response *colly.Response, err error) {
 		pageErroredChan <- struct{}{}
@@ -174,6 +163,17 @@ func getBooks(booksChannel chan<- BookFull) {
 	close(booksChannel)
 }
 
+func logErroredPages(pageErroredChan chan struct{}) {
+	numPageErrored := 0
+	lastTimeError := time.Now()
+	for range pageErroredChan {
+		numPageErrored++
+		fmt.Println("Error every", time.Now().Sub(lastTimeError))
+		lastTimeError = time.Now()
+	}
+	fmt.Println(numPageErrored, "errored pages.")
+}
+
 func logVisitedPages(pageVisitedChan chan struct{}, queueSize int) {
 	numPageVisited := 0
 	lastPageVisited := 0
@@ -203,4 +203,68 @@ func shuffle(slice []string) {
 		j := rand.Intn(i + 1)
 		slice[i], slice[j] = slice[j], slice[i]
 	}
+}
+
+func scrapeRepricerBooks(dbPublishedBooks map[string]BookFull, booksChannel chan<- BookPartial) {
+	var err error
+	// Create colly collector, while impersonating chrome.
+	fakeChrome := req.DefaultClient().ImpersonateChrome()
+	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")))
+	c.SetClient(&http.Client{
+		Transport: fakeChrome.Transport,
+		Timeout:   30 * time.Second,
+	})
+	c.SetRequestTimeout(30 * time.Second)
+
+	q, _ := queue.New(60, &queue.InMemoryQueueStorage{MaxSize: len(dbPublishedBooks)})
+
+	// Adding all URLs to the queue
+	for _, book := range dbPublishedBooks {
+		err := q.AddURL(book.URL)
+		if err != nil {
+			_, err := fmt.Fprintln(os.Stderr, "Error on adding URL:", err)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+
+	queueSize, _ := q.Size()
+
+	pageErroredChan := make(chan struct{}, 5)
+	defer close(pageErroredChan)
+	go logErroredPages(pageErroredChan)
+
+	c.OnError(func(response *colly.Response, err error) {
+		pageErroredChan <- struct{}{}
+		fmt.Println("Page visit errored", err)
+		_ = response.Request.Retry()
+	})
+
+	pageVisitedChan := make(chan struct{}, 10)
+	defer close(pageVisitedChan)
+	go logVisitedPages(pageVisitedChan, queueSize)
+
+	c.OnHTML("body", func(element *colly.HTMLElement) {
+		pageVisitedChan <- struct{}{}
+		price := element.ChildAttr("span.new-price.new-detail-price", "content")
+		bookAvailableText := element.ChildText("span.big.lightGreen strong")
+		available := bookAvailableText == "Disponibilità immediata"
+		ISBN := element.ChildAttr("div.info-data-product", "data-dimension8")
+		booksChannel <- BookPartial{
+			ISBN:      ISBN,
+			Price:     price,
+			Available: available,
+		}
+	})
+
+	err = q.Run(c) // Blocking
+	fmt.Println("[DEBUG] After q.Run")
+	if err != nil {
+		panic(err)
+	}
+
+	c.Wait()
+	fmt.Println("[DEBUG] After c.Wait")
+	close(booksChannel)
 }
