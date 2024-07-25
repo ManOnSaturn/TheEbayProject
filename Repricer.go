@@ -5,6 +5,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/net/context"
 	"os"
+	"os/exec"
 	"time"
 )
 
@@ -46,7 +47,10 @@ func Repricer() {
 
 	var booksToUpdate []*BookPartial
 	for bookInfo := range booksChannel {
-		booksToUpdate = append(booksToUpdate, &bookInfo)
+		dbBook := dbPublishedBooks[bookInfo.ISBN]
+		if dbBook.Price != bookInfo.Price || bookInfo.Available == false {
+			booksToUpdate = append(booksToUpdate, &bookInfo)
+		}
 	}
 
 	scrapingFinishedChannel <- true
@@ -56,4 +60,16 @@ func Repricer() {
 
 	bulkInsertBooksToUpdate(booksToUpdateCollection, booksToUpdate)
 	fmt.Println("Finished updating ", len(booksToUpdate), " books.")
+	cmd := exec.Command("/bin/bash", "/home/mattia/ebay/repricer/start_repricer.sh")
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		_, err := fmt.Fprintf(os.Stderr, "Error executing script: %s", err)
+		if err != nil {
+			return
+		}
+		return
+	}
+	fmt.Printf("%s\n", output)
+
 }
