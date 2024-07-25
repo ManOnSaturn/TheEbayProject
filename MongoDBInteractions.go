@@ -91,19 +91,23 @@ func bulkInsertBooksToUpdate(coll *mongo.Collection, books []*BookPartial) {
 		return
 	}
 
-	var documents []interface{}
+	var operations []mongo.WriteModel
 	for _, book := range books {
-		document := mongoDBBookToUpdateDocument{
-			ISBN:      book.ISBN,
-			Price:     book.Price,
-			Available: book.Available,
-		}
-		documents = append(documents, document)
+		filter := bson.M{"ISBN": book.ISBN}
+		update := bson.M{"$set": bson.M{
+			"Price":     book.Price,
+			"Available": book.Available,
+		}}
+		upsert := mongo.NewUpdateOneModel()
+		upsert.SetFilter(filter)
+		upsert.SetUpdate(update)
+		upsert.SetUpsert(true)
+		operations = append(operations, upsert)
 	}
 
-	_, err := coll.InsertMany(context.TODO(), documents)
+	_, err := coll.BulkWrite(context.TODO(), operations)
 	if err != nil {
-		_, err := fmt.Fprintln(os.Stderr, "Error occurred while inserting books to update in MongoDB", err, documents)
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred while upserting books in MongoDB:", err)
 		if err != nil {
 			panic(err)
 		}
