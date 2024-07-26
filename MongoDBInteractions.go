@@ -120,7 +120,6 @@ func bulkUpdateBooks(coll *mongo.Collection, books []*BookFull) {
 		update := bson.M{
 			"$set": bson.M{
 				"ISBN":      book.ISBN,
-				"Published": false,
 				"Title":     book.Title,
 				"Available": book.Available,
 				"Price":     book.Price,

@@ -80,7 +80,7 @@ func getBooksToAddAndUpdate(booksCollection *mongo.Collection, scrapedBooksSet m
 		if !ok {
 			// If the book ISBN from the scraped books set is not in the DB, then add the book to the DB
 			booksToAdd = append(booksToAdd, &bookInfo)
-		} else if !bookInfo.Published && bookFromDB != bookInfo {
+		} else if !bookFromDB.Published && bookFromDB != bookInfo {
 			// Else if the scraped book is in the DB, it's unpublished from us, and it has some differences, update it
 			booksToUpdate = append(booksToUpdate, &bookInfo)
 		}
