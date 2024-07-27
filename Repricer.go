@@ -48,7 +48,7 @@ func Repricer() {
 	var booksToUpdate []*BookPartial
 	for bookInfo := range booksChannel {
 		dbBook := dbPublishedBooks[bookInfo.ISBN]
-		if dbBook.Price != bookInfo.Price || bookInfo.Available == false {
+		if dbBook.Price != bookInfo.Price || dbBook.Available != bookInfo.Available {
 			booksToUpdate = append(booksToUpdate, &bookInfo)
 		}
 	}

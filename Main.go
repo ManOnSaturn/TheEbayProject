@@ -9,14 +9,14 @@ import (
 type BookPartial struct {
 	ISBN      string
 	Price     string
-	Available bool
+	Available string
 }
 
 type BookFull struct {
 	ISBN      string
 	Published bool
 	Title     string
-	Available bool
+	Available string
 	Price     string
 	URL       string
 	ImageURL  string

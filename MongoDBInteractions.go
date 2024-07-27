@@ -16,7 +16,7 @@ type mongoDBBookDocument struct {
 	ISBN      string             `bson:"ISBN"`
 	Published bool               `bson:"Published"`
 	Title     string             `bson:"Title"`
-	Available bool               `bson:"Available"`
+	Available string             `bson:"Available"`
 	Price     string             `bson:"Price"`
 	URL       string             `bson:"URL"`
 	ImageURL  string             `bson:"ImageURL"`

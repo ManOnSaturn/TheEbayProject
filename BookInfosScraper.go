@@ -99,7 +99,6 @@ func getBooks(booksChannel chan<- BookFull) {
 		element.ForEach("div.single-box", func(index int, element *colly.HTMLElement) {
 			bookURL := element.ChildAttr("a.link", "href")
 			bookAvailableText := element.ChildText("span.time")
-			bookAvailable := bookAvailableText == "Disponibilità immediata"
 			bookISBN := element.ChildAttr("div.info-data-product", "data-dimension8")
 			bookTitle := element.ChildAttr("div.info-data-product", "data-name")
 			bookPrice := element.ChildAttr("div.info-data-product", "data-metric3")
@@ -112,7 +111,7 @@ func getBooks(booksChannel chan<- BookFull) {
 			booksChannel <- BookFull{
 				ISBN:      bookISBN,
 				Title:     bookTitle,
-				Available: bookAvailable,
+				Available: bookAvailableText,
 				Price:     bookPrice,
 				URL:       bookURL,
 				ImageURL:  strings.Replace("https://www.mondadoristore.it"+bookImageURL, "/ZOM/", "/NZO/", 1),
@@ -249,12 +248,11 @@ func scrapeRepricerBooks(dbPublishedBooks map[string]BookFull, booksChannel chan
 		pageVisitedChan <- struct{}{}
 		price := element.ChildAttr("span.new-price.new-detail-price", "content")
 		bookAvailableText := element.ChildText("span.big.lightGreen strong")
-		available := bookAvailableText == "Disponibilità immediata"
 		ISBN := element.ChildAttr("div.info-data-product", "data-dimension8")
 		booksChannel <- BookPartial{
 			ISBN:      ISBN,
 			Price:     price,
-			Available: available,
+			Available: bookAvailableText,
 		}
 	})
 
