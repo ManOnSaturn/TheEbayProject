@@ -12,19 +12,19 @@ import (
 func FullScraping() {
 	startTime := time.Now()
 
-	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
-	defer cancel()
-	scrapingFinishedChannel := make(chan bool)
-
-	go func() {
-		select {
-		case <-scrapingFinishedChannel:
-			cancel()
-		case <-ctx.Done():
-			panic("Scraping timed out")
-		}
-	}()
+	//// Create a context with timeout
+	//ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
+	//defer cancel()
+	//scrapingFinishedChannel := make(chan bool)
+	//
+	//go func() {
+	//	select {
+	//	case <-scrapingFinishedChannel:
+	//		cancel()
+	//	case <-ctx.Done():
+	//		panic("Scraping timed out")
+	//	}
+	//}()
 
 	booksChannel := make(chan BookFull, 60)
 
@@ -36,7 +36,7 @@ func FullScraping() {
 		bookSet[bookInfo] = true
 	}
 
-	scrapingFinishedChannel <- true
+	//scrapingFinishedChannel <- true
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
 
 	client := connectToMongo()

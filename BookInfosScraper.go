@@ -125,7 +125,7 @@ func getBooks(booksChannel chan<- BookFull) {
 	})
 
 	const maxQueueSize = 40000
-	q, _ := queue.New(60, &queue.InMemoryQueueStorage{MaxSize: maxQueueSize})
+	q, _ := queue.New(10, &queue.InMemoryQueueStorage{MaxSize: maxQueueSize})
 
 	// Shuffling for the sake of not visiting all the pages from the same category, to average their speeds.
 	shuffle(URLList)
