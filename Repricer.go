@@ -37,7 +37,7 @@ func Repricer() {
 		case <-scrapingFinishedChannel:
 			cancel()
 		case <-ctx.Done():
-			panic("Scraping timed out")
+			panic("Repricing timed out")
 		}
 	}()
 
@@ -48,7 +48,11 @@ func Repricer() {
 	var booksToUpdate []*BookPartial
 	for bookInfo := range booksChannel {
 		dbBook := dbPublishedBooks[bookInfo.ISBN]
-		if dbBook.Price != bookInfo.Price || dbBook.Available != bookInfo.Available {
+		if dbBook.Available != bookInfo.Available {
+			fmt.Println("Availability changed to ", bookInfo.Available, " for ", bookInfo.ISBN)
+			booksToUpdate = append(booksToUpdate, &bookInfo)
+		} else if dbBook.Price != bookInfo.Price {
+			fmt.Println("Price changed to ", bookInfo.Price, " for ", bookInfo.ISBN)
 			booksToUpdate = append(booksToUpdate, &bookInfo)
 		}
 	}
