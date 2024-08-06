@@ -64,16 +64,18 @@ func Repricer() {
 
 	bulkInsertBooksToUpdate(booksToUpdateCollection, booksToUpdate)
 	fmt.Println("Finished updating ", len(booksToUpdate), " books.")
-	cmd := exec.Command("/bin/bash", "/home/mattia/ebay/repricer/start_repricer.sh")
 
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		_, err := fmt.Fprintf(os.Stderr, "Error executing script: %s", err)
+	// Start python repricer if there is any book to update.
+	if len(booksToUpdate) > 0 {
+		cmd := exec.Command("/bin/bash", "/home/mattia/ebay/repricer/start_repricer.sh")
+		output, err := cmd.CombinedOutput()
 		if err != nil {
+			_, err := fmt.Fprintf(os.Stderr, "Error executing script: %s", err)
+			if err != nil {
+				return
+			}
 			return
 		}
-		return
+		fmt.Printf("%s\n", output)
 	}
-	fmt.Printf("%s\n", output)
-
 }
