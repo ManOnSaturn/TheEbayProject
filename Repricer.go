@@ -67,7 +67,7 @@ func Repricer() {
 
 	// Start python repricer if there is any book to update.
 	if len(booksToUpdate) > 0 {
-		cmd := exec.Command("/bin/bash", "/home/mattia/repricer/start_repricer.sh --repricer")
+		cmd := exec.Command("/bin/bash", "/home/mattia/repricer/start_repricer.sh", "--repricer")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			_, err := fmt.Fprintf(os.Stderr, "Error in starting repricer script from GoLang to Python: %s", err)
