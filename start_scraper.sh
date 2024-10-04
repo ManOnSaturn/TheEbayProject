@@ -5,7 +5,7 @@ if [ $# -lt 1 ]; then
     exit 1
 fi
 
-LOCKFILE="/var/lock/scraper.lock"
+LOCKFILE="/var/lock/ebay.lock"
 
 # Acquire the lock
 exec 200>"$LOCKFILE"
