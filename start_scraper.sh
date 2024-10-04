@@ -23,7 +23,7 @@ if [ -f "$output_file" ]; then
     rm "$output_file"
 fi
 
-python_script="/home/mattia/ebay/send_error.py"
+send_error_script="/home/mattia/ebay/send_error.py"
 
 /home/mattia/ebay/Scraper $1 > "$output_file" 2> >(tee -a "$output_file" | python3 "$python_script")
 
