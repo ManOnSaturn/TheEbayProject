@@ -5,7 +5,7 @@ if [ $# -lt 1 ]; then
     exit 1
 fi
 
-LOCKFILE="/var/lock/ebay.lock"
+LOCKFILE="/var/lock/scraper.lock"
 
 # Acquire the lock
 exec 200>"$LOCKFILE"
@@ -25,7 +25,7 @@ fi
 
 send_error_script="/home/mattia/ebay/send_error.py"
 
-/home/mattia/ebay/Scraper $1 > "$output_file" 2> >(tee -a "$output_file" | python3 "$python_script")
+/home/mattia/ebay/Scraper $1 > "$output_file" 2> >(tee -a "$output_file" | python3 "$send_error_script")
 
 # Release the lock
 flock -u 200

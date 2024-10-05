@@ -80,7 +80,7 @@ func insertBooks(coll *mongo.Collection, books []*BookFull) {
 	}
 }
 
-func bulkInsertBooksToUpdate(coll *mongo.Collection, books []*BookPartial) {
+func bulkInsertBooksToUpdate(coll *mongo.Collection, books []BookToUpdate) {
 	if len(books) == 0 {
 		return
 	}
@@ -89,8 +89,10 @@ func bulkInsertBooksToUpdate(coll *mongo.Collection, books []*BookPartial) {
 	for _, book := range books {
 		filter := bson.M{"ISBN": book.ISBN}
 		update := bson.M{"$set": bson.M{
-			"Price":     book.Price,
-			"Available": book.Available,
+			"Price":               book.Price,
+			"PriceChanged":        book.PriceChanged,
+			"Available":           book.Available,
+			"AvailabilityChanged": book.AvailabilityChanged,
 		}}
 		upsert := mongo.NewUpdateOneModel()
 		upsert.SetFilter(filter)
@@ -181,7 +183,7 @@ func getAllDBBooks(coll *mongo.Collection, dbBooks map[string]BookFull) {
 func getAllPublishedBooks(coll *mongo.Collection, dbBooks map[string]BookFull) {
 	startTime := time.Now()
 	// Find all documents
-	cur, err := coll.Find(context.TODO(), bson.D{{"Published", true}})
+	cur, err := coll.Find(context.TODO(), bson.D{{"ListingId", bson.D{{"$exists", true}}}})
 	if err != nil {
 		log.Fatal(err)
 	}

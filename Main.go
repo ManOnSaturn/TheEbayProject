@@ -12,6 +12,14 @@ type BookPartial struct {
 	Available string
 }
 
+type BookToUpdate struct {
+	ISBN                string
+	Price               string
+	PriceChanged        bool
+	Available           string
+	AvailabilityChanged bool
+}
+
 type BookFull struct {
 	ISBN      string
 	Published bool

@@ -45,15 +45,21 @@ func Repricer() {
 
 	go scrapeRepricerBooks(dbPublishedBooks, booksChannel)
 
-	var booksToUpdate []*BookPartial
+	var booksToUpdate []BookToUpdate
 	for bookInfo := range booksChannel {
 		dbBook := dbPublishedBooks[bookInfo.ISBN]
+		bookToUpdate := BookToUpdate{bookInfo.ISBN, bookInfo.Price, false, bookInfo.Available, false}
 		if dbBook.Available != bookInfo.Available {
+			bookToUpdate.AvailabilityChanged = true
 			fmt.Println("Availability changed to ", bookInfo.Available, " for ", bookInfo.ISBN)
-			booksToUpdate = append(booksToUpdate, &bookInfo)
-		} else if dbBook.Price != bookInfo.Price {
+		}
+		if dbBook.Price != bookInfo.Price {
+			bookToUpdate.PriceChanged = true
 			fmt.Println("Price changed to ", bookInfo.Price, " for ", bookInfo.ISBN)
-			booksToUpdate = append(booksToUpdate, &bookInfo)
+		}
+
+		if bookToUpdate.AvailabilityChanged || bookToUpdate.PriceChanged {
+			booksToUpdate = append(booksToUpdate, bookToUpdate)
 		}
 	}
 
