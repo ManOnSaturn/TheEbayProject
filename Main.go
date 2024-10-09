@@ -38,10 +38,15 @@ type BookFull struct {
 func main() {
 	startTime := time.Now()
 
-	if os.Args[1] == "--fullScrape" {
+	if len(os.Args) > 1 && os.Args[1] == "--scrapeBestsellers" {
+		ScrapeBestsellers()
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "--fullScrape" {
 		FullScraping()
 	}
-	if os.Args[1] == "--repricer" {
+
+	if len(os.Args) > 1 && os.Args[1] == "--repricer" {
 		Repricer()
 	}
 

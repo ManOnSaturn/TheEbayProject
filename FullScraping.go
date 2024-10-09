@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"go.mongodb.org/mongo-driver/mongo"
-	"golang.org/x/net/context"
-	"os"
 	"sync"
 	"time"
 )
@@ -40,15 +38,7 @@ func FullScraping() {
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
 
 	client := connectToMongo()
-	defer func(client *mongo.Client) {
-		err := client.Disconnect(context.TODO())
-		if err != nil {
-			_, err := fmt.Fprintln(os.Stderr, "Error while disconnecting client.")
-			if err != nil {
-				fmt.Println(err)
-			}
-		}
-	}(client)
+	defer disconnectFromMongo(client)
 
 	booksCollection := client.Database("Mondadori").Collection("Books")
 	booksToAdd, booksToUpdate := getBooksToAddAndUpdate(booksCollection, bookSet)

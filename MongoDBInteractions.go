@@ -28,6 +28,16 @@ type mongoDBBookDocument struct {
 	UpdatedAt primitive.DateTime `bson:"UpdatedAt"`
 }
 
+func disconnectFromMongo(client *mongo.Client) {
+	err := client.Disconnect(context.TODO())
+	if err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "Error while disconnecting client.")
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+}
+
 func connectToMongo() *mongo.Client {
 	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017/")
 	client, err := mongo.Connect(context.TODO(), clientOptions)

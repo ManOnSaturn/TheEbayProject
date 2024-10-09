@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/net/context"
 	"os"
 	"os/exec"
@@ -13,22 +12,14 @@ func Repricer() {
 	startTime := time.Now()
 
 	client := connectToMongo()
-	defer func(client *mongo.Client) {
-		err := client.Disconnect(context.TODO())
-		if err != nil {
-			_, err := fmt.Fprintln(os.Stderr, "Error while disconnecting client.")
-			if err != nil {
-				fmt.Println(err)
-			}
-		}
-	}(client)
+	defer disconnectFromMongo(client)
 
 	booksCollection := client.Database("Mondadori").Collection("Books")
 	dbPublishedBooks := make(map[string]BookFull, 5000)
 	getAllPublishedBooks(booksCollection, dbPublishedBooks)
 
 	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	scrapingFinishedChannel := make(chan bool)
 
