@@ -72,7 +72,10 @@ func getBooks(booksChannel chan<- BookFull) {
 
 	c.OnError(func(response *colly.Response, err error) {
 		pageErroredChan <- struct{}{}
-		fmt.Println("Page visit errored", err)
+		_, err = fmt.Fprintln(os.Stderr, "Page visit errored", err)
+		if err != nil {
+			panic(err)
+		}
 		_ = response.Request.Retry()
 	})
 
@@ -169,6 +172,13 @@ func logErroredPages(pageErroredChan chan struct{}) {
 		numPageErrored++
 		fmt.Println("Error every", time.Now().Sub(lastTimeError))
 		lastTimeError = time.Now()
+		if numPageErrored > 1000 {
+			_, err := fmt.Fprintln(os.Stderr, "1000 errors reached. Closing.")
+			if err != nil {
+				panic(err)
+			}
+			os.Exit(-1)
+		}
 	}
 	fmt.Println(numPageErrored, "errored pages.")
 }
