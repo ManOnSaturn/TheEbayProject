@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -56,12 +57,21 @@ type ASINISBNPair struct {
 
 func getISBNs(asins []string) []ASINISBNPair {
 	fakeChrome := req.DefaultClient().ImpersonateChrome()
+
 	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")))
 	c.SetClient(&http.Client{
 		Transport: fakeChrome.Transport,
 		Timeout:   30 * time.Second,
 	})
 	c.SetRequestTimeout(30 * time.Second)
+	err := c.Limit(&colly.LimitRule{
+		DomainGlob:  "*",
+		Parallelism: 1,
+		Delay:       1 * time.Second,
+	})
+	if err != nil {
+		panic(err)
+	}
 
 	ASINISBNPairs := make([]ASINISBNPair, 0)
 	isbnRegex := regexp.MustCompile(`\d{3}-\d{10}`)
@@ -69,6 +79,13 @@ func getISBNs(asins []string) []ASINISBNPair {
 	c.OnHTML("body", func(element *colly.HTMLElement) {
 		isbn := isbnRegex.FindString(element.Text)
 		asin := element.Request.URL.Path[4:]
+		if len(isbn) < 13 {
+			_, err := fmt.Fprintln(os.Stderr, "ISBN shorter than 13 characters:", isbn, "For ASIN:", asin)
+			if err != nil {
+				panic(err)
+			}
+			return
+		}
 		ASINISBNPairs = append(ASINISBNPairs, ASINISBNPair{ASIN: asin, ISBN: isbn})
 	})
 
