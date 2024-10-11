@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"os"
+	"runtime"
 	"time"
 )
 
@@ -39,7 +40,12 @@ func disconnectFromMongo(client *mongo.Client) {
 }
 
 func connectToMongo() *mongo.Client {
-	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017/")
+	var clientOptions *options.ClientOptions
+	if runtime.GOOS == "windows" {
+		clientOptions = options.Client().ApplyURI("mongodb://192.168.188.45:27017/")
+	} else {
+		clientOptions = options.Client().ApplyURI("mongodb://localhost:27017/")
+	}
 	client, err := mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {
 		fmt.Println("Error occurred while trying to connect to MongoDB")

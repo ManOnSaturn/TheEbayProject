@@ -39,15 +39,15 @@ func main() {
 	startTime := time.Now()
 
 	if len(os.Args) > 1 && os.Args[1] == "--scrapeBestsellers" {
-		ScrapeBestsellers()
+		scrapeBestsellers()
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "--fullScrape" {
-		FullScraping()
+		fullScrape()
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "--repricer" {
-		Repricer()
+		repricer()
 	}
 
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")

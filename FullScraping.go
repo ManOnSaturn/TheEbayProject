@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func FullScraping() {
+func fullScrape() {
 	startTime := time.Now()
 
 	//// Create a context with timeout

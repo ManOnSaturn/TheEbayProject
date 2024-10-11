@@ -22,10 +22,27 @@ type Item struct {
 	ID string `json:"id"`
 }
 
-func ScrapeBestsellers() {
-	asins := GetASINs()
-	ASINISBNPairs := getISBNs(asins)
+func getPrunedASINs(client *mongo.Client, ASINs []string) []string {
+	prunedASINs := make([]string, 0)
+	bestsellersCollection := client.Database("Mondadori").Collection("BestsellersAmazon")
+	for _, ASIN := range ASINs {
+		count, err := bestsellersCollection.CountDocuments(context.TODO(), bson.D{{"ASIN", ASIN}})
+		if err != nil {
+			break
+		}
+
+		if count == 0 {
+			prunedASINs = append(prunedASINs, ASIN)
+		}
+	}
+	return prunedASINs
+}
+
+func scrapeBestsellers() {
+	asins := getASINs()
 	client := connectToMongo()
+	prunedASINs := getPrunedASINs(client, asins)
+	ASINISBNPairs := getISBNs(prunedASINs)
 	bestsellersCollection := client.Database("Mondadori").Collection("BestsellersAmazon")
 
 	var bulkOps []mongo.WriteModel
@@ -86,7 +103,7 @@ func getISBNs(asins []string) []ASINISBNPair {
 			}
 			return
 		}
-		ASINISBNPairs = append(ASINISBNPairs, ASINISBNPair{ASIN: asin, ISBN: isbn})
+		ASINISBNPairs = append(ASINISBNPairs, ASINISBNPair{ASIN: asin, ISBN: strings.Replace(isbn, "-", "", 1)})
 	})
 
 	c.OnError(func(response *colly.Response, err error) {
@@ -105,7 +122,7 @@ func getISBNs(asins []string) []ASINISBNPair {
 	return ASINISBNPairs
 }
 
-func GetASINs() []string {
+func getASINs() []string {
 	URLs := []string{
 		"https://www.amazon.it/gp/bestsellers/books",
 		"https://www.amazon.it/gp/bestsellers/books/13077484031", // Adolescenti e ragazzi

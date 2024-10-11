@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func Repricer() {
+func repricer() {
 	startTime := time.Now()
 
 	client := connectToMongo()
