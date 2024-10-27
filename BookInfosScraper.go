@@ -155,13 +155,11 @@ func getBooks(booksChannel chan<- BookFull) {
 		}
 	}
 	err = q.Run(c) // Blocking
-	fmt.Println("[DEBUG] After q.Run")
 	if err != nil {
 		panic(err)
 	}
 
 	c.Wait()
-	fmt.Println("[DEBUG] After c.Wait")
 	close(booksChannel)
 }
 

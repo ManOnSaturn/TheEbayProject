@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gocolly/colly/v2"
+	"github.com/gocolly/colly/v2/queue"
 	"github.com/imroc/req/v3"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -42,9 +43,39 @@ func scrapeBestsellers() {
 	asins := getASINs()
 	client := connectToMongo()
 	prunedASINs := getPrunedASINs(client, asins)
-	ASINISBNPairs := getISBNs(prunedASINs)
+	ASINISBNPairs, kindleASINs := getISBNs(prunedASINs)
 	bestsellersCollection := client.Database("Mondadori").Collection("BestsellersAmazon")
 
+	result := insertISBNs(ASINISBNPairs, bestsellersCollection)
+	fmt.Printf("(Normal books) Upserted %d documents and modified %d documents.\n", result.UpsertedCount, result.ModifiedCount)
+
+	result = insertASINsKindle(kindleASINs, bestsellersCollection)
+	fmt.Printf("(Kindle books) Upserted %d documents and modified %d documents.\n", result.UpsertedCount, result.ModifiedCount)
+}
+
+func insertASINsKindle(asinsKindle []string, bestsellersCollection *mongo.Collection) *mongo.BulkWriteResult {
+	var bulkOps []mongo.WriteModel
+	for _, asin := range asinsKindle {
+		filter := bson.D{{"ASIN", asin}}
+		update := bson.D{
+			{"$set", bson.D{
+				{"ASIN", asin},
+				{"isKindle", true}}},
+		}
+		bulkOps = append(bulkOps, mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true))
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	// Execute the bulk write
+	result, err := bestsellersCollection.BulkWrite(ctx, bulkOps)
+	if err != nil {
+		log.Fatalf("Failed to execute bulk write: %v", err)
+	}
+	return result
+}
+
+func insertISBNs(ASINISBNPairs []ASINISBNPair, bestsellersCollection *mongo.Collection) *mongo.BulkWriteResult {
 	var bulkOps []mongo.WriteModel
 	for _, pair := range ASINISBNPairs {
 		filter := bson.D{{"ISBN", pair.ISBN}}
@@ -63,8 +94,7 @@ func scrapeBestsellers() {
 	if err != nil {
 		log.Fatalf("Failed to execute bulk write: %v", err)
 	}
-
-	fmt.Printf("Upserted %d documents and modified %d documents.\n", result.UpsertedCount, result.ModifiedCount)
+	return result
 }
 
 type ASINISBNPair struct {
@@ -72,7 +102,7 @@ type ASINISBNPair struct {
 	ISBN string
 }
 
-func getISBNs(asins []string) []ASINISBNPair {
+func getISBNs(asins []string) ([]ASINISBNPair, []string) {
 	fakeChrome := req.DefaultClient().ImpersonateChrome()
 
 	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")))
@@ -81,47 +111,59 @@ func getISBNs(asins []string) []ASINISBNPair {
 		Timeout:   30 * time.Second,
 	})
 	c.SetRequestTimeout(30 * time.Second)
-	err := c.Limit(&colly.LimitRule{
-		DomainGlob:  "*",
-		Parallelism: 1,
-		Delay:       1 * time.Second,
-	})
-	if err != nil {
-		panic(err)
-	}
 
 	ASINISBNPairs := make([]ASINISBNPair, 0)
 	isbnRegex := regexp.MustCompile(`\d{3}-\d{10}`)
-
+	kindleASINs := make([]string, 0)
 	c.OnHTML("body", func(element *colly.HTMLElement) {
+		fmt.Println("Visited")
 		isbn := isbnRegex.FindString(element.Text)
 		asin := element.Request.URL.Path[4:]
 		if len(isbn) < 13 {
-			_, err := fmt.Fprintln(os.Stderr, "ISBN shorter than 13 characters:", isbn, "For ASIN:", asin)
-			if err != nil {
-				panic(err)
-			}
+			element.ForEach("span#productSubtitle", func(i int, element *colly.HTMLElement) {
+				if i > 0 {
+					panic("Found i>0")
+				}
+				if strings.Contains(element.Text, "Formato Kindle") {
+					fmt.Println("Found kindle book", asin)
+					kindleASINs = append(kindleASINs, asin)
+				}
+			})
 			return
 		}
+
 		ASINISBNPairs = append(ASINISBNPairs, ASINISBNPair{ASIN: asin, ISBN: strings.Replace(isbn, "-", "", 1)})
 	})
 
 	c.OnError(func(response *colly.Response, err error) {
-		println(response.Request.URL)
-		println(err.Error())
+		fmt.Println(response.Request.URL)
+		fmt.Println(err.Error())
 	})
 
-	for _, asin := range asins {
-		err := c.Visit("https://www.amazon.it/dp/" + asin)
-		if err != nil {
-			println(err)
-		}
+	q, _ := queue.New(6, &queue.InMemoryQueueStorage{MaxSize: len(asins)})
+	addAsinsToQ(asins, q)
+	err := q.Run(c) // Blocking
+	if err != nil {
+		panic(err)
 	}
 
 	c.Wait()
-	return ASINISBNPairs
+	return ASINISBNPairs, kindleASINs
 }
 
+func addAsinsToQ(asinsFailed []string, q *queue.Queue) {
+	for _, asin := range asinsFailed {
+		err := q.AddURL("https://www.amazon.it/dp/" + asin)
+		if err != nil {
+			_, err := fmt.Fprintln(os.Stderr, "Error on adding URL:", err)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+}
+
+// span#productSubtitle   Formato Kindle
 func getASINs() []string {
 	URLs := []string{
 		"https://www.amazon.it/gp/bestsellers/books",
@@ -166,24 +208,22 @@ func getASINs() []string {
 
 	c.OnHTML("ul.a-pagination li.a-normal a", func(element *colly.HTMLElement) {
 		secondPageLink := element.Attr("href")
+		URLs = URLs[1:]
 		if !strings.HasSuffix(secondPageLink, "pg=1") {
-			err := c.Visit("https://www.amazon.it" + secondPageLink)
-			if err != nil {
-				return
-			}
+			URLs = append(URLs, "https://www.amazon.it"+secondPageLink)
 		}
 	})
 
 	c.OnError(func(response *colly.Response, err error) {
-		println(response)
-		println(err)
+		fmt.Println(response)
+		fmt.Println(err)
 	})
 
-	for _, URL := range URLs {
-		err := c.Visit(URL)
+	for len(URLs) > 0 {
+		fmt.Println("Remaining bestsellers pages: ", len(URLs))
+		err := c.Visit(URLs[0])
 		if err != nil {
-			println(err)
-
+			fmt.Println(err)
 		}
 	}
 
