@@ -29,7 +29,7 @@ type mongoDBBookDocument struct {
 	UpdatedAt primitive.DateTime `bson:"UpdatedAt"`
 }
 
-func disconnectFromMongo(client *mongo.Client) {
+func disconnectFromMongo() {
 	err := client.Disconnect(context.TODO())
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "Error while disconnecting client.")
@@ -39,28 +39,31 @@ func disconnectFromMongo(client *mongo.Client) {
 	}
 }
 
-func connectToMongo() *mongo.Client {
+var client *mongo.Client
+
+func connectToMongo() {
 	var clientOptions *options.ClientOptions
 	if runtime.GOOS == "windows" {
 		clientOptions = options.Client().ApplyURI("mongodb://192.168.188.45:27017/")
 	} else {
 		clientOptions = options.Client().ApplyURI("mongodb://localhost:27017/")
 	}
-	client, err := mongo.Connect(context.TODO(), clientOptions)
+	var err error
+	client, err = mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {
 		fmt.Println("Error occurred while trying to connect to MongoDB")
 		panic(err)
 	}
 
 	// Send a ping to confirm a successful connection
-	if err := client.Database("admin").RunCommand(context.TODO(), bson.D{{"ping", 1}}).Err(); err != nil {
+	if err = client.Database("admin").RunCommand(context.TODO(), bson.D{{"ping", 1}}).Err(); err != nil {
 		panic(err)
 	}
 	fmt.Println("Pinged mongodb deployment. Successfully connected to MongoDB!")
-	return client
 }
 
-func insertBooks(coll *mongo.Collection, books []*BookFull) {
+func insertBooks(books []*BookFull) {
+	coll := client.Database("Mondadori").Collection("Books")
 	if len(books) == 0 {
 		return
 	}
@@ -96,7 +99,8 @@ func insertBooks(coll *mongo.Collection, books []*BookFull) {
 	}
 }
 
-func bulkInsertBooksToUpdate(coll *mongo.Collection, books []BookToUpdate) {
+func bulkInsertBooksToUpdate(books []BookToUpdate) {
+	coll := client.Database("Mondadori").Collection("BooksToUpdate")
 	if len(books) == 0 {
 		return
 	}
@@ -126,7 +130,8 @@ func bulkInsertBooksToUpdate(coll *mongo.Collection, books []BookToUpdate) {
 	}
 }
 
-func bulkUpdateBooks(coll *mongo.Collection, books []*BookFull) {
+func bulkUpdateBooks(books []*BookFull) {
+	coll := client.Database("Mondadori").Collection("Books")
 	if len(books) == 0 {
 		return
 	}
@@ -163,8 +168,9 @@ func bulkUpdateBooks(coll *mongo.Collection, books []*BookFull) {
 	}
 }
 
-func getAllDBBooks(coll *mongo.Collection, dbBooks map[string]BookFull) {
+func getAllDBBooks(dbBooks map[string]BookFull) {
 	startTime := time.Now()
+	coll := client.Database("Mondadori").Collection("Books")
 	// Find all documents
 	cur, err := coll.Find(context.TODO(), bson.D{{"ISBN", bson.D{{"$exists", true}}}})
 	if err != nil {
@@ -196,8 +202,9 @@ func getAllDBBooks(coll *mongo.Collection, dbBooks map[string]BookFull) {
 	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
 }
 
-func getAllPublishedBooks(coll *mongo.Collection, dbBooks map[string]BookFull) {
+func getAllPublishedBooks(dbBooks map[string]BookFull) {
 	startTime := time.Now()
+	coll := client.Database("Mondadori").Collection("Books")
 	// Find all documents
 	cur, err := coll.Find(context.TODO(), bson.D{{"ListingId", bson.D{{"$exists", true}}}})
 	if err != nil {
@@ -227,4 +234,24 @@ func getAllPublishedBooks(coll *mongo.Collection, dbBooks map[string]BookFull) {
 			Language: result.Language}
 	}
 	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
+}
+
+func setProductIsBook(URL string, isBook bool) {
+	coll := client.Database("Mondadori").Collection("FeltrinelliProducts")
+	filter := bson.M{"URL": URL}
+
+	update := bson.M{
+		"$set": bson.M{
+			"IsBook": isBook,
+		},
+	}
+	coll.UpdateOne(context.TODO(), filter, update)
+}
+
+func bulkWriteFeltrinelliProducts(models []mongo.WriteModel) {
+	collection := client.Database("Mondadori").Collection("FeltrinelliProducts")
+	_, err := collection.BulkWrite(context.TODO(), models)
+	if err != nil {
+		log.Fatalf("Failed to execute bulk write: %v", err)
+	}
 }

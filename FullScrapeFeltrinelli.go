@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -132,7 +133,7 @@ func getEAN(s string) string {
 	}
 }
 
-func scrapeAllXMLs(client *mongo.Client) {
+func scrapeAllXMLs() {
 	baseURL := "https://www.lafeltrinelli.it/sitemap_itbook_"
 	urlSets := make([]UrlSet, 0)
 
@@ -178,7 +179,7 @@ func scrapeAllXMLs(client *mongo.Client) {
 			models = append(models, model)
 
 			if len(models) >= 10000 {
-				bulkWriteToMongo(client, models)
+				bulkWriteFeltrinelliProducts(models)
 				models = make([]mongo.WriteModel, 0)
 				fmt.Println("Processed 10000 XML entries into the DB.")
 				fmt.Println("Working URLSet index", urlSetsIndex, "out of", len(urlSets))
@@ -188,19 +189,11 @@ func scrapeAllXMLs(client *mongo.Client) {
 
 	// Execute remaining models in bulk
 	if len(models) > 0 {
-		bulkWriteToMongo(client, models)
+		bulkWriteFeltrinelliProducts(models)
 	}
 }
 
-func bulkWriteToMongo(client *mongo.Client, models []mongo.WriteModel) {
-	collection := client.Database("Mondadori").Collection("FeltrinelliProducts")
-	_, err := collection.BulkWrite(context.TODO(), models)
-	if err != nil {
-		log.Fatalf("Failed to execute bulk write: %v", err)
-	}
-}
-
-func getNewProducts(client *mongo.Client, productsChan chan Product) {
+func getNewProducts(productsChan chan Product) {
 	collection := client.Database("Mondadori").Collection("FeltrinelliProducts")
 
 	// Filter for documents where the field 'IsBook' does not exist
@@ -230,7 +223,10 @@ func getNewProducts(client *mongo.Client, productsChan chan Product) {
 			log.Printf("Missing or invalid URL/EAN in document: %v\n", document)
 			continue
 		}
-
+		if !strings.HasPrefix(ean, "978") && !strings.HasPrefix(ean, "979") {
+			setProductIsBook(url, false)
+			continue
+		}
 		// Send the decoded product to the channel
 		productsChan <- Product{URL: url, EAN: ean}
 	}
@@ -254,6 +250,16 @@ func getEANFromRequest(e *colly.HTMLElement) string {
 	return parts[len(parts)-1]
 }
 
+func cleanDescription(input string) string {
+	// Remove leading spaces and newlines
+	re := regexp.MustCompile(`^[\s\r\n]+`)
+	trimmed := re.ReplaceAllString(input, "")
+
+	// Replace multiple spaces or newlines with a single space
+	re = regexp.MustCompile(`[\s\r\n]{2,}`)
+	return re.ReplaceAllString(trimmed, " ")
+}
+
 func getProductInfos(productsChan chan Product) {
 	fakeChrome := req.DefaultClient().ImpersonateChrome()
 	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")))
@@ -267,21 +273,18 @@ func getProductInfos(productsChan chan Product) {
 	fullBooksChan := make(chan *FeltrinelliScrapedBook)
 
 	c.OnHTML("pdp-physical-buy-info", func(e *colly.HTMLElement) {
-		if e.Attr(":is-ebook") == "true" {
-			fmt.Println("It's an ebook, skipping.")
+		if e.Attr(":is-ebook") == "true" || e.Attr(":is-marketplace") == "true" {
+			setProductIsBook(e.Request.URL.String(), false)
+			e.Request.Ctx.Put("Skip", true)
 			return
 		}
 		EAN := getEANFromRequest(e)
-		if !strings.HasPrefix(EAN, "978") && !strings.HasPrefix(EAN, "979") {
-			fmt.Println("It's not a book, skipping.")
+		var inventoryJSON InventoryJSON
+		if unmarshalJSON([]byte(e.Attr(":inventory")), &inventoryJSON) != nil {
 			return
 		}
 		var availabilityJSON AvailabilityJSON
 		if unmarshalJSON([]byte(e.Attr(":availability")), &availabilityJSON) != nil {
-			return
-		}
-		var inventoryJSON InventoryJSON
-		if unmarshalJSON([]byte(e.Attr(":inventory")), &inventoryJSON) != nil {
 			return
 		}
 
@@ -299,18 +302,29 @@ func getProductInfos(productsChan chan Product) {
 	})
 
 	c.OnHTML("div.cc-content-text.cc-clamp.cc-clamp--7", func(e *colly.HTMLElement) {
+		if e.Request.Ctx.GetAny("Skip") == true {
+			return
+		}
 		EAN := getEANFromRequest(e)
 		var descriptionParagraphs []string
 		e.ForEach("p", func(i int, element *colly.HTMLElement) {
 			descriptionParagraphs = append(descriptionParagraphs, element.Text)
 		})
-		descriptionData := DescriptionData{ShortDescription: descriptionParagraphs[0], LongDescription: strings.Join(descriptionParagraphs[1:], "\n")}
+		var descriptionData DescriptionData
+		if descriptionParagraphs != nil && len(descriptionParagraphs) > 0 {
+			descriptionData = DescriptionData{ShortDescription: descriptionParagraphs[0], LongDescription: strings.Join(descriptionParagraphs[1:], "\n")}
+		} else {
+			descriptionData = DescriptionData{ShortDescription: cleanDescription(e.Text)}
+		}
 		lock.Lock()
 		booksMap[EAN].DescriptionData = descriptionData
 		lock.Unlock()
 	})
 
 	c.OnHTML("div#pdp-dettagli", func(e *colly.HTMLElement) {
+		if e.Request.Ctx.GetAny("Skip") == true {
+			return
+		}
 		EAN := getEANFromRequest(e)
 		details := map[string]string{}
 		e.ForEach("div.cc-em-content-body", func(i int, e2 *colly.HTMLElement) {
@@ -356,14 +370,12 @@ func getProductInfos(productsChan chan Product) {
 }
 
 func fullScrapeFeltrinelli() {
-	client := connectToMongo()
-	defer disconnectFromMongo(client)
 	startTime := time.Now()
 
-	//scrapeAllXMLs(client)
+	//scrapeAllXMLs()
 
 	productsChan := make(chan Product)
-	go getNewProducts(client, productsChan)
+	go getNewProducts(productsChan)
 	//go testSendingProducts(productsChan)
 
 	getProductInfos(productsChan)
@@ -376,7 +388,19 @@ func testSendingProducts(productsChan chan<- Product) {
 }
 
 func insertFeltrinelliScrapedBooks(fullBooksChan <-chan *FeltrinelliScrapedBook) {
+	startTime := time.Now()
+	lastTime := startTime
+	count := 0
+
 	for fullBook := range fullBooksChan {
 		fmt.Println(fullBook)
+
+		count++
+		if count%5 == 0 {
+			elapsed := time.Since(startTime).Seconds()
+			diff := time.Since(lastTime).Seconds()
+			fmt.Printf("Inserted %d books. Time elapsed: %.2f. Since last: %.2f\n", count, elapsed, diff)
+			lastTime = time.Now()
+		}
 	}
 }

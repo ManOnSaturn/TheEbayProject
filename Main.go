@@ -37,7 +37,8 @@ type BookFull struct {
 
 func main() {
 	startTime := time.Now()
-
+	connectToMongo()
+	defer disconnectFromMongo()
 	if len(os.Args) > 1 && os.Args[1] == "--scrapeBestsellers" {
 		scrapeBestsellers()
 	}

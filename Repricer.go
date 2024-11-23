@@ -11,12 +11,8 @@ import (
 func repricer() {
 	startTime := time.Now()
 
-	client := connectToMongo()
-	defer disconnectFromMongo(client)
-
-	booksCollection := client.Database("Mondadori").Collection("Books")
 	dbPublishedBooks := make(map[string]BookFull, 5000)
-	getAllPublishedBooks(booksCollection, dbPublishedBooks)
+	getAllPublishedBooks(dbPublishedBooks)
 
 	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
@@ -57,9 +53,7 @@ func repricer() {
 	scrapingFinishedChannel <- true
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
 
-	booksToUpdateCollection := client.Database("Mondadori").Collection("BooksToUpdate")
-
-	bulkInsertBooksToUpdate(booksToUpdateCollection, booksToUpdate)
+	bulkInsertBooksToUpdate(booksToUpdate)
 	fmt.Println("Finished updating ", len(booksToUpdate), " books.")
 
 	// Start python repricer if there is any book to update.

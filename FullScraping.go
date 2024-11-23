@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"go.mongodb.org/mongo-driver/mongo"
 	"sync"
 	"time"
 )
@@ -37,29 +36,25 @@ func fullScrape() {
 	//scrapingFinishedChannel <- true
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
 
-	client := connectToMongo()
-	defer disconnectFromMongo(client)
-
-	booksCollection := client.Database("Mondadori").Collection("Books")
-	booksToAdd, booksToUpdate := getBooksToAddAndUpdate(booksCollection, bookSet)
+	booksToAdd, booksToUpdate := getBooksToAddAndUpdate(bookSet)
 
 	var mongoDBOperationsWG sync.WaitGroup
 
 	mongoDBOperationsWG.Add(1)
 	go func() {
 		defer mongoDBOperationsWG.Done()
-		insertBooks(booksCollection, booksToAdd)
+		insertBooks(booksToAdd)
 		fmt.Println("Finished inserting new books in DB.")
 	}()
 
 	mongoDBOperationsWG.Wait()
-	bulkUpdateBooks(booksCollection, booksToUpdate)
+	bulkUpdateBooks(booksToUpdate)
 	fmt.Println("Finished updating books in DB.")
 }
 
-func getBooksToAddAndUpdate(booksCollection *mongo.Collection, scrapedBooksSet map[BookFull]bool) ([]*BookFull, []*BookFull) {
+func getBooksToAddAndUpdate(scrapedBooksSet map[BookFull]bool) ([]*BookFull, []*BookFull) {
 	dbBooks := make(map[string]BookFull, 750000)
-	getAllDBBooks(booksCollection, dbBooks)
+	getAllDBBooks(dbBooks)
 	var booksToAdd []*BookFull
 	var booksToUpdate []*BookFull
 

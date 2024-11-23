@@ -41,7 +41,6 @@ func getPrunedASINs(client *mongo.Client, ASINs []string) []string {
 
 func scrapeBestsellers() {
 	asins := getASINs()
-	client := connectToMongo()
 	prunedASINs := getPrunedASINs(client, asins)
 	ASINISBNPairs, kindleASINs := getISBNs(prunedASINs)
 	bestsellersCollection := client.Database("Mondadori").Collection("BestsellersAmazon")
