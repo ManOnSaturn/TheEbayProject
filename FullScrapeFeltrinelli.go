@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -35,7 +36,7 @@ type Product struct {
 type Promo struct {
 	ID              int    `json:"id"`
 	CatalogMessage  string `json:"catalog_message"`
-	IsPriceHidden   string `json:"is_price_hidden"`
+	IsPriceHidden   bool   `json:"is_price_hidden"`
 	OutputSmartlist int    `json:"output_smartlist"`
 	PriceMessage    string `json:"price_message"`
 	StartDate       string `json:"start_date"`
@@ -43,28 +44,54 @@ type Promo struct {
 	IsPromoTime     bool   `json:"is_promo_time"`
 }
 
-type ProductJSON struct {
-	IsCurrentlySellableOnIbs bool    `json:"IsCurrentlySellableOnIbs"`
-	IsTooFarAvailable        bool    `json:"IsTooFarAvailable"`
-	IsNextToTodayAvailable   bool    `json:"IsNextToTodayAvailable"`
-	HasPublicationDate       bool    `json:"HasPublicationDate"`
-	HasFuturePublicationDate bool    `json:"HasFuturePublicationDate"`
-	HasInventoryPromotions   bool    `json:"HasInventoryPromotions"`
-	HasInventoryDiscount     bool    `json:"HasInventoryDiscount"`
-	IsDiscountAvarageVisible bool    `json:"IsDiscountAvarageVisible"`
-	ShippingCharges          int     `json:"ShippingCharges"`
-	InventoryDiscount        float64 `json:"InventoryDiscount"`
-	Price                    int     `json:"Price"`
-	IsGift                   bool    `json:"IsGift"`
-	FidelityPoints           int     `json:"FidelityPoints"`
-	SaleStartDate            string  `json:"sale_start_date"`
-	PublicationDate          string  `json:"publication_date"`
-	Promo                    []Promo `json:"promo"`
-	Status                   int     `json:"status"`
-	QuantityWarehouse        int     `json:"quantity_warehouse"`
-	SmartListID              []int   `json:"smart_list_id"`
-	IsAvailable              bool    `json:"IsAvailable"`
-	MaxSellableQuantity      int     `json:"MaxSellableQuantity"`
+type InventoryJSON struct {
+	IsCurrentlySellableOnIbs bool        `json:"IsCurrentlySellableOnIbs"`
+	IsTooFarAvailable        bool        `json:"IsTooFarAvailable"`
+	IsNextToTodayAvailable   bool        `json:"IsNextToTodayAvailable"`
+	HasPublicationDate       bool        `json:"HasPublicationDate"`
+	HasFuturePublicationDate bool        `json:"HasFuturePublicationDate"`
+	HasInventoryPromotions   bool        `json:"HasInventoryPromotions"`
+	HasInventoryDiscount     bool        `json:"HasInventoryDiscount"`
+	IsDiscountAvarageVisible bool        `json:"IsDiscountAvarageVisible"`
+	ShippingCharges          json.Number `json:"ShippingCharges"`
+	InventoryDiscount        float64     `json:"InventoryDiscount"`
+	Price                    json.Number `json:"Price"`
+	IsGift                   bool        `json:"IsGift"`
+	FidelityPoints           int         `json:"FidelityPoints"`
+	SaleStartDate            string      `json:"sale_start_date"`
+	PublicationDate          string      `json:"publication_date"`
+	Promo                    []Promo     `json:"promo"`
+	Status                   int         `json:"status"`
+	QuantityWarehouse        int         `json:"quantity_warehouse"`
+	SmartListID              []int       `json:"smart_list_id"`
+	IsAvailable              bool        `json:"IsAvailable"`
+	MaxSellableQuantity      int         `json:"MaxSellableQuantity"`
+}
+
+type AvailabilityJSON struct {
+	Text              string `json:"Text"`
+	StickyDesktopText string `json:"AvailabilityStickyText"`
+}
+
+type BuyInfos struct {
+	ISBN                   string
+	Price                  json.Number `json:"Price"`
+	Availability           string      `json:"Text"`
+	AvailabilityStickyText string      `json:"AvailabilityStickyText"`
+	Title                  string
+	URL                    string
+	ImageURL               string
+}
+
+type DescriptionData struct {
+	ShortDescription string
+	LongDescription  string
+}
+
+type FeltrinelliScrapedBook struct {
+	BuyInfos        BuyInfos
+	DescriptionData DescriptionData
+	Details         map[string]string
 }
 
 func downloadAndParseXML(url string) (*UrlSet, error) {
@@ -214,6 +241,19 @@ func getNewProducts(client *mongo.Client, productsChan chan Product) {
 	close(productsChan) // Close the channel when done
 }
 
+func unmarshalJSON[T any](data []byte, target *T) error {
+	err := json.Unmarshal(data, target)
+	if err != nil {
+		return fmt.Errorf("error unmarshaling JSON into %T: %w", target, err)
+	}
+	return nil
+}
+
+func getEANFromRequest(e *colly.HTMLElement) string {
+	parts := strings.Split(e.Request.URL.Path, "/")
+	return parts[len(parts)-1]
+}
+
 func getProductInfos(productsChan chan Product) {
 	fakeChrome := req.DefaultClient().ImpersonateChrome()
 	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")))
@@ -222,28 +262,88 @@ func getProductInfos(productsChan chan Product) {
 		Timeout:   30 * time.Second,
 	})
 	c.SetRequestTimeout(30 * time.Second)
+	lock := sync.Mutex{}
+	booksMap := make(map[string]*FeltrinelliScrapedBook)
+	fullBooksChan := make(chan *FeltrinelliScrapedBook)
 
-	// On every HTML element that matches the div with id "buy-box"
-	//c.OnHTML("div#buy-box span.cc-price", func(e *colly.HTMLElement) {
-	//	// Print the HTML content of the div
-	//	fmt.Println("Buy Box Found:", e.Text, e.Request.URL.Host+e.Request.URL.Path)
-	//})
 	c.OnHTML("pdp-physical-buy-info", func(e *colly.HTMLElement) {
-		// Print the HTML content of the div
-		fmt.Println("Physical buy info found:", e.Attr(":availability"), e.Request.URL.Host+e.Request.URL.Path)
-		var product ProductJSON
-		err := json.Unmarshal([]byte(e.Attr(":inventory")), &product)
-		if err != nil {
-			fmt.Println("Error unmarshaling JSON:", err)
+		if e.Attr(":is-ebook") == "true" {
+			fmt.Println("It's an ebook, skipping.")
 			return
 		}
-		fmt.Printf("%+v\n", product)
+		EAN := getEANFromRequest(e)
+		if !strings.HasPrefix(EAN, "978") && !strings.HasPrefix(EAN, "979") {
+			fmt.Println("It's not a book, skipping.")
+			return
+		}
+		var availabilityJSON AvailabilityJSON
+		if unmarshalJSON([]byte(e.Attr(":availability")), &availabilityJSON) != nil {
+			return
+		}
+		var inventoryJSON InventoryJSON
+		if unmarshalJSON([]byte(e.Attr(":inventory")), &inventoryJSON) != nil {
+			return
+		}
+
+		buyInfos := BuyInfos{Price: inventoryJSON.Price,
+			Title:                  e.Attr(":product-title"),
+			Availability:           availabilityJSON.Text,
+			AvailabilityStickyText: availabilityJSON.StickyDesktopText,
+			URL:                    e.Request.URL.String(),
+			ISBN:                   EAN,
+			ImageURL:               "https://www.lafeltrinelli.it/images/" + EAN + "_0_536_0_75.jpg"}
+		lock.Lock()
+		booksMap[EAN] = &FeltrinelliScrapedBook{}
+		booksMap[EAN].BuyInfos = buyInfos
+		lock.Unlock()
+	})
+
+	c.OnHTML("div.cc-content-text.cc-clamp.cc-clamp--7", func(e *colly.HTMLElement) {
+		EAN := getEANFromRequest(e)
+		var descriptionParagraphs []string
+		e.ForEach("p", func(i int, element *colly.HTMLElement) {
+			descriptionParagraphs = append(descriptionParagraphs, element.Text)
+		})
+		descriptionData := DescriptionData{ShortDescription: descriptionParagraphs[0], LongDescription: strings.Join(descriptionParagraphs[1:], "\n")}
+		lock.Lock()
+		booksMap[EAN].DescriptionData = descriptionData
+		lock.Unlock()
+	})
+
+	c.OnHTML("div#pdp-dettagli", func(e *colly.HTMLElement) {
+		EAN := getEANFromRequest(e)
+		details := map[string]string{}
+		e.ForEach("div.cc-em-content-body", func(i int, e2 *colly.HTMLElement) {
+			e2.ForEach("div.cc-item", func(i int, e3 *colly.HTMLElement) {
+				var key string
+				var value string
+				e3.ForEach("span", func(i int, e4 *colly.HTMLElement) {
+					if i == 0 {
+						key = strings.Replace(e4.Text, ":", "", 1)
+					} else {
+						value = e4.ChildText("a")
+						if value == "" {
+							value = e4.Text
+						}
+					}
+				})
+				details[key] = value
+			})
+		})
+
+		lock.Lock()
+		booksMap[EAN].Details = details
+		fullBooksChan <- booksMap[EAN]
+		delete(booksMap, EAN)
+		lock.Unlock()
 	})
 
 	c.OnError(func(response *colly.Response, err error) {
 		fmt.Println(response)
 		fmt.Println(err)
 	})
+
+	go insertFeltrinelliScrapedBooks(fullBooksChan)
 
 	for product := range productsChan {
 		err := c.Visit(product.URL)
@@ -264,8 +364,19 @@ func fullScrapeFeltrinelli() {
 
 	productsChan := make(chan Product)
 	go getNewProducts(client, productsChan)
+	//go testSendingProducts(productsChan)
 
 	getProductInfos(productsChan)
 
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
+}
+
+func testSendingProducts(productsChan chan<- Product) {
+	productsChan <- Product{URL: "https://www.lafeltrinelli.it/storia-del-nuovo-cognome-amica-libro-elena-ferrante/e/9788866321811", EAN: "9788866321811"}
+}
+
+func insertFeltrinelliScrapedBooks(fullBooksChan <-chan *FeltrinelliScrapedBook) {
+	for fullBook := range fullBooksChan {
+		fmt.Println(fullBook)
+	}
 }
