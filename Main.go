@@ -43,7 +43,7 @@ func main() {
 	connectToMongo()
 	defer disconnectFromMongo()
 	go func() {
-		log.Println(http.ListenAndServe("127.0.0.1:8888", nil))
+		log.Println(http.ListenAndServe("0.0.0.0:8888", nil))
 		panic("what")
 	}()
 
