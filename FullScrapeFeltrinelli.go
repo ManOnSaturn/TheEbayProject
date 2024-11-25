@@ -235,9 +235,9 @@ func getNewProducts(urlsChan chan string) {
 		}
 		urlsChan <- url
 		count++
-		if count%50 == 0 {
+		if count%100 == 0 {
 			newNow := time.Now()
-			fmt.Println(count, "products processed. 50 done in", newNow.Sub(startTime).Seconds())
+			fmt.Println(count, "products processed. 100 done in", newNow.Sub(startTime).Seconds())
 			startTime = newNow
 		}
 	}
@@ -455,7 +455,7 @@ func handleFeltrinelliScrapedBooks(fullBooksChan <-chan *FeltrinelliScrapedBook)
 	for fullBook := range fullBooksChan {
 		insertFeltrinelliScrapedBook(fullBook)
 		count++
-		if count%50 == 0 {
+		if count%100 == 0 {
 			elapsed := time.Since(startTime).Seconds()
 			diff := time.Since(lastTime).Seconds()
 			fmt.Printf("Inserted %d books. Time elapsed: %.2f. Since last: %.2f\n", count, elapsed, diff)
