@@ -392,8 +392,8 @@ func fullScrapeFeltrinelli() {
 	//scrapeAllXMLs()
 
 	urlsChan := make(chan string)
-	//go getNewProducts(urlsChan)
-	go testSendingProducts(urlsChan)
+	go getNewProducts(urlsChan)
+	//go testSendingProducts(urlsChan)
 
 	fullBooksChan := make(chan *FeltrinelliScrapedBook)
 
@@ -405,6 +405,7 @@ func fullScrapeFeltrinelli() {
 
 func testSendingProducts(urlsChan chan<- string) {
 	urlsChan <- "https://www.lafeltrinelli.it/hans-haacke-ediz-inglese-libro-vari/e/9780714843193"
+	close(urlsChan)
 }
 
 func handleFeltrinelliScrapedBooks(fullBooksChan <-chan *FeltrinelliScrapedBook) {
