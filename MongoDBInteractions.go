@@ -302,6 +302,7 @@ func insertFeltrinelliScrapedBook(feltrinelliScrapedBook *FeltrinelliScrapedBook
 		{Key: "Details", Value: feltrinelliScrapedBook.Details},
 		{Key: "LongDescription", Value: feltrinelliScrapedBook.DescriptionData.LongDescription},
 		{Key: "ShortDescription", Value: feltrinelliScrapedBook.DescriptionData.ShortDescription},
+		{Key: "Category", Value: feltrinelliScrapedBook.Category},
 	}
 
 	filter := bson.M{"ISBN": feltrinelliScrapedBook.BuyInfos.ISBN}

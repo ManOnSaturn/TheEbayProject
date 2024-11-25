@@ -42,10 +42,6 @@ func main() {
 	startTime := time.Now()
 	connectToMongo()
 	defer disconnectFromMongo()
-	go func() {
-		log.Println(http.ListenAndServe("0.0.0.0:8888", nil))
-		panic("what")
-	}()
 
 	if len(os.Args) > 1 && os.Args[1] == "--scrapeBestsellers" {
 		scrapeBestsellers()
@@ -60,6 +56,10 @@ func main() {
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "--fullScrapeFeltrinelli" {
+		go func() {
+			log.Println(http.ListenAndServe("0.0.0.0:8888", nil))
+			panic("what")
+		}()
 		fullScrapeFeltrinelli()
 	}
 

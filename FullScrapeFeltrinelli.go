@@ -9,6 +9,7 @@ import (
 	"github.com/imroc/req/v3"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"io"
 	"log"
 	"net/http"
@@ -87,6 +88,7 @@ type DescriptionData struct {
 type FeltrinelliScrapedBook struct {
 	BuyInfos        BuyInfos
 	DescriptionData DescriptionData
+	Category        string
 	Details         map[string]string
 }
 
@@ -197,7 +199,8 @@ func getNewProducts(urlsChan chan string) {
 	// Filter for documents where the field 'IsBook' does not exist
 	filter := bson.M{"IsBook": bson.M{"$exists": false}}
 	todoContext := context.TODO()
-	cursor, err := feltrinelliProductsCollection.Find(todoContext, filter)
+	opts := options.Find().SetBatchSize(1000)
+	cursor, err := feltrinelliProductsCollection.Find(todoContext, filter, opts)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -208,6 +211,8 @@ func getNewProducts(urlsChan chan string) {
 		}
 	}(cursor, todoContext)
 
+	startTime := time.Now()
+	count := 0
 	// Iterate through the cursor and send documents to the channel
 	for cursor.Next(todoContext) {
 		var document bson.M
@@ -229,6 +234,12 @@ func getNewProducts(urlsChan chan string) {
 			continue
 		}
 		urlsChan <- url
+		count++
+		if count%50 == 0 {
+			newNow := time.Now()
+			fmt.Println(count, "products processed. 50 done in", newNow.Sub(startTime).Seconds())
+			startTime = newNow
+		}
 	}
 
 	if err := cursor.Err(); err != nil {
@@ -274,14 +285,14 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 
 	err := c.Limit(&colly.LimitRule{
 		DomainGlob:  "*",
-		Parallelism: 5,
+		Parallelism: 10,
 	})
 	if err != nil {
 		panic(err)
 	}
 	c.SetRequestTimeout(30 * time.Second)
 
-	semaphore := NewSemaphore(100)
+	semaphore := NewSemaphore(50)
 	booksMap := make(map[string]*FeltrinelliScrapedBook)
 	booksMapLock := sync.Mutex{}
 
@@ -313,6 +324,20 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 		booksMapLock.Lock()
 		booksMap[EAN] = &FeltrinelliScrapedBook{}
 		booksMap[EAN].BuyInfos = buyInfos
+		booksMapLock.Unlock()
+	})
+
+	c.OnHTML("ul.cc-breadcrumbs-list", func(e *colly.HTMLElement) {
+		if e.Request.Ctx.GetAny("Skip") == true {
+			return
+		}
+		var breadcrumbTexts []string
+		e.ForEach("span", func(i int, element *colly.HTMLElement) {
+			breadcrumbTexts = append(breadcrumbTexts, element.Text)
+		})
+		EAN := getEANFromPath(e.Request.URL.Path)
+		booksMapLock.Lock()
+		booksMap[EAN].Category = strings.Join(breadcrumbTexts[2:], " > ")
 		booksMapLock.Unlock()
 	})
 
