@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -94,7 +95,12 @@ func downloadAndParseXML(url string) (*UrlSet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to download: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			panic(err)
+		}
+	}(resp.Body)
 
 	// Check if the response status is OK
 	if resp.StatusCode != http.StatusOK {
@@ -195,7 +201,12 @@ func getNewProducts(urlsChan chan string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer cursor.Close(todoContext)
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		err := cursor.Close(ctx)
+		if err != nil {
+			panic(err)
+		}
+	}(cursor, todoContext)
 
 	// Iterate through the cursor and send documents to the channel
 	for cursor.Next(todoContext) {
@@ -267,11 +278,10 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 	})
 	if err != nil {
 		panic(err)
-		return
 	}
 	c.SetRequestTimeout(30 * time.Second)
 
-	semaphore := make(chan struct{}, 100)
+	semaphore := NewSemaphore(100)
 	booksMap := make(map[string]*FeltrinelliScrapedBook)
 	booksMapLock := sync.Mutex{}
 
@@ -356,6 +366,7 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 	})
 
 	c.OnScraped(func(response *colly.Response) {
+		semaphore.Release()
 		if response.Request.Ctx.GetAny("Skip") == true {
 			return
 		}
@@ -368,15 +379,18 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 			delete(booksMap, EAN)
 		}
 		booksMapLock.Unlock()
-		<-semaphore
 	})
 
 	c.OnError(func(response *colly.Response, err error) {
-		panic(err)
+		semaphore.Release()
+		_, err2 := fmt.Fprintf(os.Stderr, "error for request:%s, %v\n", response.Request.URL, err)
+		if err2 != nil {
+			panic(err2)
+		}
 	})
 
 	for url := range urlsChan {
-		semaphore <- struct{}{}
+		semaphore.Acquire()
 		err := c.Visit(url)
 		if err != nil {
 			log.Fatalf("Failed to visit:%s", err)
