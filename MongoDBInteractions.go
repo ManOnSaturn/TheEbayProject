@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -10,6 +11,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strconv"
 	"time"
 )
 
@@ -40,6 +42,8 @@ func disconnectFromMongo() {
 }
 
 var client *mongo.Client
+var feltrinelliProductsCollection *mongo.Collection
+var feltrinelliBooksCollection *mongo.Collection
 
 func connectToMongo() {
 	var clientOptions *options.ClientOptions
@@ -59,6 +63,9 @@ func connectToMongo() {
 	if err = client.Database("admin").RunCommand(context.TODO(), bson.D{{"ping", 1}}).Err(); err != nil {
 		panic(err)
 	}
+	feltrinelliProductsCollection = client.Database("Mondadori").Collection("FeltrinelliProducts")
+	feltrinelliBooksCollection = client.Database("Mondadori").Collection("FeltrinelliBooks")
+
 	fmt.Println("Pinged mongodb deployment. Successfully connected to MongoDB!")
 }
 
@@ -237,7 +244,6 @@ func getAllPublishedBooks(dbBooks map[string]BookFull) {
 }
 
 func setProductIsBook(URL string, isBook bool) {
-	coll := client.Database("Mondadori").Collection("FeltrinelliProducts")
 	filter := bson.M{"URL": URL}
 
 	update := bson.M{
@@ -245,13 +251,69 @@ func setProductIsBook(URL string, isBook bool) {
 			"IsBook": isBook,
 		},
 	}
-	coll.UpdateOne(context.TODO(), filter, update)
+	_, err := feltrinelliProductsCollection.UpdateOne(context.TODO(), filter, update)
+	if err != nil {
+		log.Fatalf("Failed to set product is book: %v", err)
+	}
 }
 
 func bulkWriteFeltrinelliProducts(models []mongo.WriteModel) {
-	collection := client.Database("Mondadori").Collection("FeltrinelliProducts")
-	_, err := collection.BulkWrite(context.TODO(), models)
+	_, err := feltrinelliProductsCollection.BulkWrite(context.TODO(), models)
 	if err != nil {
 		log.Fatalf("Failed to execute bulk write: %v", err)
 	}
+}
+
+func formatNumber(number json.Number) (string, error) {
+	// Parse the JSON number into an integer
+	num, err := number.Int64()
+	if err != nil {
+		return "", fmt.Errorf("failed to parse number: %v", err)
+	}
+
+	// Convert the integer to a string
+	numStr := strconv.FormatInt(num, 10)
+
+	// Ensure the number has at least 2 digits for formatting
+	if len(numStr) < 2 {
+		numStr = "0" + numStr
+	}
+
+	// Split the string to insert a comma
+	n := len(numStr)
+	formatted := numStr[:n-2] + "," + numStr[n-2:]
+
+	return formatted, nil
+}
+
+func insertFeltrinelliScrapedBook(feltrinelliScrapedBook *FeltrinelliScrapedBook) {
+	formattedPrice, err := formatNumber(feltrinelliScrapedBook.BuyInfos.Price)
+	if err != nil {
+		log.Fatalf("Failed to convert price: %v", err)
+	}
+	delete(feltrinelliScrapedBook.Details, "EAN")
+	document := bson.D{
+		{Key: "URL", Value: feltrinelliScrapedBook.BuyInfos.URL},
+		{Key: "ISBN", Value: feltrinelliScrapedBook.BuyInfos.ISBN},
+		{Key: "Title", Value: feltrinelliScrapedBook.BuyInfos.Title},
+		{Key: "AvailabilityStickyText", Value: feltrinelliScrapedBook.BuyInfos.AvailabilityStickyText},
+		{Key: "Availability", Value: feltrinelliScrapedBook.BuyInfos.Availability},
+		{Key: "Price", Value: formattedPrice},
+		{Key: "Details", Value: feltrinelliScrapedBook.Details},
+		{Key: "LongDescription", Value: feltrinelliScrapedBook.DescriptionData.LongDescription},
+		{Key: "ShortDescription", Value: feltrinelliScrapedBook.DescriptionData.ShortDescription},
+	}
+
+	filter := bson.M{"ISBN": feltrinelliScrapedBook.BuyInfos.ISBN}
+	update := bson.M{"$set": document}
+	// Enable upsert
+	opts := options.Update().SetUpsert(true)
+
+	// Perform the update operation
+	_, err = feltrinelliBooksCollection.UpdateOne(context.TODO(), filter, update, opts)
+	if err != nil {
+		log.Fatalf("Failed to insert feltrinelli scraped book: %v", err)
+	}
+
+	setProductIsBook(feltrinelliScrapedBook.BuyInfos.URL, true)
 }

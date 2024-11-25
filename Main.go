@@ -2,9 +2,12 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"net/http"
 	"os"
 	"time"
 )
+import _ "net/http/pprof"
 
 type BookPartial struct {
 	ISBN      string
@@ -39,6 +42,11 @@ func main() {
 	startTime := time.Now()
 	connectToMongo()
 	defer disconnectFromMongo()
+	go func() {
+		log.Println(http.ListenAndServe("127.0.0.1:8888", nil))
+		panic("what")
+	}()
+
 	if len(os.Args) > 1 && os.Args[1] == "--scrapeBestsellers" {
 		scrapeBestsellers()
 	}

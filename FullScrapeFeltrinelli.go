@@ -29,11 +29,6 @@ type URL struct {
 	LastMod string `xml:"lastmod"`
 }
 
-type Product struct {
-	URL string
-	EAN string
-}
-
 type Promo struct {
 	ID              int    `json:"id"`
 	CatalogMessage  string `json:"catalog_message"`
@@ -81,7 +76,6 @@ type BuyInfos struct {
 	AvailabilityStickyText string      `json:"AvailabilityStickyText"`
 	Title                  string
 	URL                    string
-	ImageURL               string
 }
 
 type DescriptionData struct {
@@ -193,20 +187,18 @@ func scrapeAllXMLs() {
 	}
 }
 
-func getNewProducts(productsChan chan Product) {
-	collection := client.Database("Mondadori").Collection("FeltrinelliProducts")
-
+func getNewProducts(urlsChan chan string) {
 	// Filter for documents where the field 'IsBook' does not exist
 	filter := bson.M{"IsBook": bson.M{"$exists": false}}
-
-	cursor, err := collection.Find(context.TODO(), filter)
+	todoContext := context.TODO()
+	cursor, err := feltrinelliProductsCollection.Find(todoContext, filter)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer cursor.Close(context.TODO())
+	defer cursor.Close(todoContext)
 
 	// Iterate through the cursor and send documents to the channel
-	for cursor.Next(context.TODO()) {
+	for cursor.Next(todoContext) {
 		var document bson.M
 		if err := cursor.Decode(&document); err != nil {
 			// Log the error but continue processing other documents
@@ -216,25 +208,22 @@ func getNewProducts(productsChan chan Product) {
 
 		// Safely extract URL and EAN from the document
 		url, okURL := document["URL"].(string)
-		ean, okEAN := document["EAN"].(string)
+		ean := url[len(url)-13:]
 
-		if !okURL || !okEAN {
-			// Log if URL or EAN is missing or of incorrect type and continue
-			log.Printf("Missing or invalid URL/EAN in document: %v\n", document)
-			continue
+		if !okURL {
+			log.Fatalf("Missing or invalid URL in document: %v\n", document)
 		}
 		if !strings.HasPrefix(ean, "978") && !strings.HasPrefix(ean, "979") {
 			setProductIsBook(url, false)
 			continue
 		}
-		// Send the decoded product to the channel
-		productsChan <- Product{URL: url, EAN: ean}
+		urlsChan <- url
 	}
 
 	if err := cursor.Err(); err != nil {
 		log.Fatal(err)
 	}
-	close(productsChan) // Close the channel when done
+	close(urlsChan) // Close the channel when done
 }
 
 func unmarshalJSON[T any](data []byte, target *T) error {
@@ -245,8 +234,8 @@ func unmarshalJSON[T any](data []byte, target *T) error {
 	return nil
 }
 
-func getEANFromRequest(e *colly.HTMLElement) string {
-	parts := strings.Split(e.Request.URL.Path, "/")
+func getEANFromPath(path string) string {
+	parts := strings.Split(path, "/")
 	return parts[len(parts)-1]
 }
 
@@ -260,17 +249,31 @@ func cleanDescription(input string) string {
 	return re.ReplaceAllString(trimmed, " ")
 }
 
-func getProductInfos(productsChan chan Product) {
+func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliScrapedBook) {
 	fakeChrome := req.DefaultClient().ImpersonateChrome()
-	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")))
+	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")), colly.Async(true))
 	c.SetClient(&http.Client{
 		Transport: fakeChrome.Transport,
 		Timeout:   30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			setProductIsBook(via[len(via)-1].URL.String(), false)
+			return fmt.Errorf("redirects are not allowed")
+		},
 	})
+
+	err := c.Limit(&colly.LimitRule{
+		DomainGlob:  "*",
+		Parallelism: 5,
+	})
+	if err != nil {
+		panic(err)
+		return
+	}
 	c.SetRequestTimeout(30 * time.Second)
-	lock := sync.Mutex{}
+
+	semaphore := make(chan struct{}, 100)
 	booksMap := make(map[string]*FeltrinelliScrapedBook)
-	fullBooksChan := make(chan *FeltrinelliScrapedBook)
+	booksMapLock := sync.Mutex{}
 
 	c.OnHTML("pdp-physical-buy-info", func(e *colly.HTMLElement) {
 		if e.Attr(":is-ebook") == "true" || e.Attr(":is-marketplace") == "true" {
@@ -278,7 +281,7 @@ func getProductInfos(productsChan chan Product) {
 			e.Request.Ctx.Put("Skip", true)
 			return
 		}
-		EAN := getEANFromRequest(e)
+		EAN := getEANFromPath(e.Request.URL.Path)
 		var inventoryJSON InventoryJSON
 		if unmarshalJSON([]byte(e.Attr(":inventory")), &inventoryJSON) != nil {
 			return
@@ -288,24 +291,26 @@ func getProductInfos(productsChan chan Product) {
 			return
 		}
 
+		title := e.Attr(":product-title")
+		title = title[1 : len(title)-1]
 		buyInfos := BuyInfos{Price: inventoryJSON.Price,
-			Title:                  e.Attr(":product-title"),
+			Title:                  title,
 			Availability:           availabilityJSON.Text,
 			AvailabilityStickyText: availabilityJSON.StickyDesktopText,
 			URL:                    e.Request.URL.String(),
-			ISBN:                   EAN,
-			ImageURL:               "https://www.lafeltrinelli.it/images/" + EAN + "_0_536_0_75.jpg"}
-		lock.Lock()
+			ISBN:                   EAN}
+		//ImageURL: "https://www.lafeltrinelli.it/images/" + EAN + "_0_536_0_75.jpg"
+		booksMapLock.Lock()
 		booksMap[EAN] = &FeltrinelliScrapedBook{}
 		booksMap[EAN].BuyInfos = buyInfos
-		lock.Unlock()
+		booksMapLock.Unlock()
 	})
 
 	c.OnHTML("div.cc-content-text.cc-clamp.cc-clamp--7", func(e *colly.HTMLElement) {
 		if e.Request.Ctx.GetAny("Skip") == true {
 			return
 		}
-		EAN := getEANFromRequest(e)
+		EAN := getEANFromPath(e.Request.URL.Path)
 		var descriptionParagraphs []string
 		e.ForEach("p", func(i int, element *colly.HTMLElement) {
 			descriptionParagraphs = append(descriptionParagraphs, element.Text)
@@ -316,16 +321,16 @@ func getProductInfos(productsChan chan Product) {
 		} else {
 			descriptionData = DescriptionData{ShortDescription: cleanDescription(e.Text)}
 		}
-		lock.Lock()
+		booksMapLock.Lock()
 		booksMap[EAN].DescriptionData = descriptionData
-		lock.Unlock()
+		booksMapLock.Unlock()
 	})
 
 	c.OnHTML("div#pdp-dettagli", func(e *colly.HTMLElement) {
 		if e.Request.Ctx.GetAny("Skip") == true {
 			return
 		}
-		EAN := getEANFromRequest(e)
+		EAN := getEANFromPath(e.Request.URL.Path)
 		details := map[string]string{}
 		e.ForEach("div.cc-em-content-body", func(i int, e2 *colly.HTMLElement) {
 			e2.ForEach("div.cc-item", func(i int, e3 *colly.HTMLElement) {
@@ -345,24 +350,36 @@ func getProductInfos(productsChan chan Product) {
 			})
 		})
 
-		lock.Lock()
+		booksMapLock.Lock()
 		booksMap[EAN].Details = details
-		fullBooksChan <- booksMap[EAN]
-		delete(booksMap, EAN)
-		lock.Unlock()
+		booksMapLock.Unlock()
+	})
+
+	c.OnScraped(func(response *colly.Response) {
+		if response.Request.Ctx.GetAny("Skip") == true {
+			return
+		}
+		EAN := getEANFromPath(response.Request.URL.Path)
+		booksMapLock.Lock()
+		if fullBook, ok := booksMap[EAN]; !ok {
+			log.Fatalf("Failed to retrieve EAN in booksMap: %s", EAN)
+		} else {
+			fullBooksChan <- fullBook
+			delete(booksMap, EAN)
+		}
+		booksMapLock.Unlock()
+		<-semaphore
 	})
 
 	c.OnError(func(response *colly.Response, err error) {
-		fmt.Println(response)
-		fmt.Println(err)
+		panic(err)
 	})
 
-	go insertFeltrinelliScrapedBooks(fullBooksChan)
-
-	for product := range productsChan {
-		err := c.Visit(product.URL)
+	for url := range urlsChan {
+		semaphore <- struct{}{}
+		err := c.Visit(url)
 		if err != nil {
-			fmt.Println(err)
+			log.Fatalf("Failed to visit:%s", err)
 		}
 	}
 
@@ -374,29 +391,31 @@ func fullScrapeFeltrinelli() {
 
 	//scrapeAllXMLs()
 
-	productsChan := make(chan Product)
-	go getNewProducts(productsChan)
-	//go testSendingProducts(productsChan)
+	urlsChan := make(chan string)
+	//go getNewProducts(urlsChan)
+	go testSendingProducts(urlsChan)
 
-	getProductInfos(productsChan)
+	fullBooksChan := make(chan *FeltrinelliScrapedBook)
+
+	go getProductInfos(urlsChan, fullBooksChan)
+	handleFeltrinelliScrapedBooks(fullBooksChan)
 
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
 }
 
-func testSendingProducts(productsChan chan<- Product) {
-	productsChan <- Product{URL: "https://www.lafeltrinelli.it/storia-del-nuovo-cognome-amica-libro-elena-ferrante/e/9788866321811", EAN: "9788866321811"}
+func testSendingProducts(urlsChan chan<- string) {
+	urlsChan <- "https://www.lafeltrinelli.it/hans-haacke-ediz-inglese-libro-vari/e/9780714843193"
 }
 
-func insertFeltrinelliScrapedBooks(fullBooksChan <-chan *FeltrinelliScrapedBook) {
+func handleFeltrinelliScrapedBooks(fullBooksChan <-chan *FeltrinelliScrapedBook) {
 	startTime := time.Now()
 	lastTime := startTime
 	count := 0
 
 	for fullBook := range fullBooksChan {
-		fmt.Println(fullBook)
-
+		insertFeltrinelliScrapedBook(fullBook)
 		count++
-		if count%5 == 0 {
+		if count%50 == 0 {
 			elapsed := time.Since(startTime).Seconds()
 			diff := time.Since(lastTime).Seconds()
 			fmt.Printf("Inserted %d books. Time elapsed: %.2f. Since last: %.2f\n", count, elapsed, diff)

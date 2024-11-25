@@ -6,7 +6,7 @@ toolchain go1.23.2
 
 require (
 	github.com/gocolly/colly/v2 v2.1.0
-	github.com/imroc/req/v3 v3.46.1
+	github.com/imroc/req/v3 v3.48.0
 	go.mongodb.org/mongo-driver v1.17.1
 )
 
