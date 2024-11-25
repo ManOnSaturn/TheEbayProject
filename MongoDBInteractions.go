@@ -44,6 +44,9 @@ func disconnectFromMongo() {
 var client *mongo.Client
 var feltrinelliProductsCollection *mongo.Collection
 var feltrinelliBooksCollection *mongo.Collection
+var booksCollection *mongo.Collection
+var booksToUpdateCollection *mongo.Collection
+var bestsellersAmazonCollection *mongo.Collection
 
 func connectToMongo() {
 	var clientOptions *options.ClientOptions
@@ -65,12 +68,14 @@ func connectToMongo() {
 	}
 	feltrinelliProductsCollection = client.Database("Mondadori").Collection("FeltrinelliProducts")
 	feltrinelliBooksCollection = client.Database("Mondadori").Collection("FeltrinelliBooks")
+	booksCollection = client.Database("Mondadori").Collection("Books")
+	booksToUpdateCollection = client.Database("Mondadori").Collection("BooksToUpdate")
+	bestsellersAmazonCollection = client.Database("Mondadori").Collection("BestsellersAmazon")
 
 	fmt.Println("Pinged mongodb deployment. Successfully connected to MongoDB!")
 }
 
 func insertBooks(books []*BookFull) {
-	coll := client.Database("Mondadori").Collection("Books")
 	if len(books) == 0 {
 		return
 	}
@@ -96,7 +101,7 @@ func insertBooks(books []*BookFull) {
 		documents = append(documents, document)
 	}
 
-	_, err := coll.InsertMany(context.TODO(), documents)
+	_, err := booksCollection.InsertMany(context.TODO(), documents)
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred while inserting book documents in MongoDB", err, documents)
 		if err != nil {
@@ -107,7 +112,6 @@ func insertBooks(books []*BookFull) {
 }
 
 func bulkInsertBooksToUpdate(books []BookToUpdate) {
-	coll := client.Database("Mondadori").Collection("BooksToUpdate")
 	if len(books) == 0 {
 		return
 	}
@@ -128,7 +132,7 @@ func bulkInsertBooksToUpdate(books []BookToUpdate) {
 		operations = append(operations, upsert)
 	}
 
-	_, err := coll.BulkWrite(context.TODO(), operations)
+	_, err := booksToUpdateCollection.BulkWrite(context.TODO(), operations)
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred while upserting books in MongoDB:", err)
 		if err != nil {
@@ -138,7 +142,6 @@ func bulkInsertBooksToUpdate(books []BookToUpdate) {
 }
 
 func bulkUpdateBooks(books []*BookFull) {
-	coll := client.Database("Mondadori").Collection("Books")
 	if len(books) == 0 {
 		return
 	}
@@ -168,7 +171,7 @@ func bulkUpdateBooks(books []*BookFull) {
 	}
 
 	bulkOption := options.BulkWrite().SetOrdered(false)
-	_, err := coll.BulkWrite(context.TODO(), models, bulkOption)
+	_, err := booksCollection.BulkWrite(context.TODO(), models, bulkOption)
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk update operation:", err)
 		panic(err)
@@ -177,9 +180,8 @@ func bulkUpdateBooks(books []*BookFull) {
 
 func getAllDBBooks(dbBooks map[string]BookFull) {
 	startTime := time.Now()
-	coll := client.Database("Mondadori").Collection("Books")
 	// Find all documents
-	cur, err := coll.Find(context.TODO(), bson.D{{"ISBN", bson.D{{"$exists", true}}}})
+	cur, err := booksCollection.Find(context.TODO(), bson.D{{"ISBN", bson.D{{"$exists", true}}}})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -211,9 +213,8 @@ func getAllDBBooks(dbBooks map[string]BookFull) {
 
 func getAllPublishedBooks(dbBooks map[string]BookFull) {
 	startTime := time.Now()
-	coll := client.Database("Mondadori").Collection("Books")
 	// Find all documents
-	cur, err := coll.Find(context.TODO(), bson.D{{"ListingId", bson.D{{"$exists", true}}}})
+	cur, err := booksCollection.Find(context.TODO(), bson.D{{"ListingId", bson.D{{"$exists", true}}}})
 	if err != nil {
 		log.Fatal(err)
 	}

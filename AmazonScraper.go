@@ -23,11 +23,10 @@ type Item struct {
 	ID string `json:"id"`
 }
 
-func getPrunedASINs(client *mongo.Client, ASINs []string) []string {
+func getPrunedASINs(ASINs []string) []string {
 	prunedASINs := make([]string, 0)
-	bestsellersCollection := client.Database("Mondadori").Collection("BestsellersAmazon")
 	for _, ASIN := range ASINs {
-		count, err := bestsellersCollection.CountDocuments(context.TODO(), bson.D{{"ASIN", ASIN}})
+		count, err := bestsellersAmazonCollection.CountDocuments(context.TODO(), bson.D{{"ASIN", ASIN}})
 		if err != nil {
 			break
 		}
@@ -41,18 +40,17 @@ func getPrunedASINs(client *mongo.Client, ASINs []string) []string {
 
 func scrapeBestsellers() {
 	asins := getASINs()
-	prunedASINs := getPrunedASINs(client, asins)
+	prunedASINs := getPrunedASINs(asins)
 	ASINISBNPairs, kindleASINs := getISBNs(prunedASINs)
-	bestsellersCollection := client.Database("Mondadori").Collection("BestsellersAmazon")
 
-	result := insertISBNs(ASINISBNPairs, bestsellersCollection)
+	result := insertISBNs(ASINISBNPairs)
 	fmt.Printf("(Normal books) Upserted %d documents and modified %d documents.\n", result.UpsertedCount, result.ModifiedCount)
 
-	result = insertASINsKindle(kindleASINs, bestsellersCollection)
+	result = insertASINsKindle(kindleASINs)
 	fmt.Printf("(Kindle books) Upserted %d documents and modified %d documents.\n", result.UpsertedCount, result.ModifiedCount)
 }
 
-func insertASINsKindle(asinsKindle []string, bestsellersCollection *mongo.Collection) *mongo.BulkWriteResult {
+func insertASINsKindle(asinsKindle []string) *mongo.BulkWriteResult {
 	var bulkOps []mongo.WriteModel
 	for _, asin := range asinsKindle {
 		filter := bson.D{{"ASIN", asin}}
@@ -67,14 +65,14 @@ func insertASINsKindle(asinsKindle []string, bestsellersCollection *mongo.Collec
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	// Execute the bulk write
-	result, err := bestsellersCollection.BulkWrite(ctx, bulkOps)
+	result, err := bestsellersAmazonCollection.BulkWrite(ctx, bulkOps)
 	if err != nil {
 		log.Fatalf("Failed to execute bulk write: %v", err)
 	}
 	return result
 }
 
-func insertISBNs(ASINISBNPairs []ASINISBNPair, bestsellersCollection *mongo.Collection) *mongo.BulkWriteResult {
+func insertISBNs(ASINISBNPairs []ASINISBNPair) *mongo.BulkWriteResult {
 	var bulkOps []mongo.WriteModel
 	for _, pair := range ASINISBNPairs {
 		filter := bson.D{{"ISBN", pair.ISBN}}
@@ -89,7 +87,7 @@ func insertISBNs(ASINISBNPairs []ASINISBNPair, bestsellersCollection *mongo.Coll
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	// Execute the bulk write
-	result, err := bestsellersCollection.BulkWrite(ctx, bulkOps)
+	result, err := bestsellersAmazonCollection.BulkWrite(ctx, bulkOps)
 	if err != nil {
 		log.Fatalf("Failed to execute bulk write: %v", err)
 	}
