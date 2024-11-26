@@ -319,3 +319,17 @@ func insertFeltrinelliScrapedBook(feltrinelliScrapedBook *FeltrinelliScrapedBook
 
 	setProductIsBook(feltrinelliScrapedBook.BuyInfos.URL, true)
 }
+
+func setProductProblematic(URL string, isProblematic bool) {
+	filter := bson.M{"URL": URL}
+
+	update := bson.M{
+		"$set": bson.M{
+			"IsProblematic": isProblematic,
+		},
+	}
+	_, err := feltrinelliProductsCollection.UpdateOne(context.TODO(), filter, update)
+	if err != nil {
+		log.Fatalf("Failed to set product is book: %v", err)
+	}
+}

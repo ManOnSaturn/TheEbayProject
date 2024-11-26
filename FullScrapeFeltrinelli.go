@@ -337,7 +337,11 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 		})
 		EAN := getEANFromPath(e.Request.URL.Path)
 		booksMapLock.Lock()
-		booksMap[EAN].Category = strings.Join(breadcrumbTexts[2:], " > ")
+		if _, ok := booksMap[EAN]; ok {
+			booksMap[EAN].Category = strings.Join(breadcrumbTexts[2:], " > ")
+		} else {
+			setProductProblematic(e.Request.URL.String(), true)
+		}
 		booksMapLock.Unlock()
 	})
 
