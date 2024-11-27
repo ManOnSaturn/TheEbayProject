@@ -426,8 +426,8 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 			log.Fatalf("Failed to visit:%s", err)
 		}
 	}
-
 	c.Wait()
+	close(fullBooksChan)
 }
 
 func fullScrapeFeltrinelli() {
