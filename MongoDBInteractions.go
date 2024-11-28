@@ -256,6 +256,16 @@ func setProductIsBook(URL string, isBook bool) {
 	if err != nil {
 		log.Fatalf("Failed to set product is book: %v", err)
 	}
+	deleteFeltrinelliBook(URL)
+}
+
+func deleteFeltrinelliBook(URL string) {
+	filter := bson.M{"URL": URL}
+	_, err := feltrinelliBooksCollection.DeleteOne(context.TODO(), filter)
+	if err != nil {
+		log.Fatalf("Failed to delete feltrinelli book: %v", err)
+	}
+
 }
 
 func bulkWriteFeltrinelliProducts(models []mongo.WriteModel) {
@@ -331,5 +341,33 @@ func setProductProblematic(URL string, isProblematic bool) {
 	_, err := feltrinelliProductsCollection.UpdateOne(context.TODO(), filter, update)
 	if err != nil {
 		log.Fatalf("Failed to set product is book: %v", err)
+	}
+}
+
+func setNewURLAndIsBook(originalURL string, URL string, isBook bool) {
+	filter := bson.M{"URL": originalURL}
+
+	update := bson.M{
+		"$set": bson.M{
+			"URL":    URL,
+			"IsBook": isBook,
+		},
+		"$push": bson.M{
+			"PreviousURLs": originalURL,
+		},
+	}
+	_, err := feltrinelliProductsCollection.UpdateOne(context.TODO(), filter, update)
+	if err != nil {
+		log.Fatalf("Failed to update product: %v", err)
+	}
+
+	updateBook := bson.M{
+		"$set": bson.M{
+			"URL": URL,
+		},
+	}
+	_, err = feltrinelliBooksCollection.UpdateOne(context.TODO(), filter, updateBook)
+	if err != nil {
+		log.Fatalf("Failed to update URL for book: %v", err)
 	}
 }

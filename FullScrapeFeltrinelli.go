@@ -153,6 +153,8 @@ func scrapeAllXMLs() {
 	}
 	var models []mongo.WriteModel
 
+	lastSeen := time.Now()
+
 	for urlSetsIndex, urlSet := range urlSets {
 		for _, entry := range urlSet.URLs {
 			filter := bson.M{"URL": entry.Loc}
@@ -166,9 +168,10 @@ func scrapeAllXMLs() {
 			// Create the update document
 			update := bson.M{
 				"$set": bson.M{
-					"URL":     entry.Loc,
-					"LastMod": lastMod,
-					"EAN":     getEAN(entry.Loc),
+					"URL":      entry.Loc,
+					"LastMod":  lastMod,
+					"EAN":      getEAN(entry.Loc),
+					"LastSeen": lastSeen,
 				},
 			}
 
@@ -271,6 +274,15 @@ func cleanDescription(input string) string {
 	return re.ReplaceAllString(trimmed, " ")
 }
 
+func areURLsForSameBook(URL1 string, URL2 string) bool {
+	if len(URL1) >= 13 && len(URL2) >= 13 {
+		if URL1[len(URL1)-13:] == URL2[len(URL2)-13:] {
+			return true
+		}
+	}
+	return false
+}
+
 func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliScrapedBook) {
 	fakeChrome := req.DefaultClient().ImpersonateChrome()
 	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")), colly.Async(true))
@@ -278,7 +290,13 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 		Transport: fakeChrome.Transport,
 		Timeout:   30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			setProductIsBook(via[len(via)-1].URL.String(), false)
+			reqURL := req.URL.String()
+			originalReqURL := via[len(via)-1].URL.String()
+			if areURLsForSameBook(originalReqURL, reqURL) {
+				setNewURLAndIsBook(originalReqURL, reqURL, true)
+				return nil
+			}
+			setProductIsBook(originalReqURL, false)
 			return fmt.Errorf("redirects are not allowed")
 		},
 	})
@@ -448,7 +466,7 @@ func fullScrapeFeltrinelli() {
 }
 
 func testSendingProducts(urlsChan chan<- string) {
-	urlsChan <- "https://www.lafeltrinelli.it/hans-haacke-ediz-inglese-libro-vari/e/9780714843193"
+	urlsChan <- "https://www.lafeltrinelli.it/siti-sacri-segreti-ediz-illustrata-libro-martin-gray/e/9782361956875"
 	close(urlsChan)
 }
 
