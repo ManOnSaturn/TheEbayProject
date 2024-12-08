@@ -139,7 +139,7 @@ func scrapeAllXMLs() {
 	baseURL := "https://www.lafeltrinelli.it/sitemap_itbook_"
 	urlSets := make([]UrlSet, 0)
 
-	for i := 1; i <= 63; i++ {
+	for i := 1; i <= 70; i++ {
 		// Construct the URL
 		url := baseURL + strconv.Itoa(i) + ".xml"
 
@@ -147,7 +147,7 @@ func scrapeAllXMLs() {
 		urlSet, err := downloadAndParseXML(url)
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
-			continue
+			break
 		}
 		urlSets = append(urlSets, *urlSet)
 	}
@@ -196,6 +196,8 @@ func scrapeAllXMLs() {
 	if len(models) > 0 {
 		bulkWriteFeltrinelliProducts(models)
 	}
+
+	removeAllUnseenProductsAndBook(lastSeen)
 }
 
 func getNewProducts(urlsChan chan string) {
@@ -451,7 +453,7 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 func fullScrapeFeltrinelli() {
 	startTime := time.Now()
 
-	//scrapeAllXMLs()
+	scrapeAllXMLs()
 
 	urlsChan := make(chan string)
 	go getNewProducts(urlsChan)

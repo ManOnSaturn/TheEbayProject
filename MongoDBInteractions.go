@@ -31,6 +31,10 @@ type mongoDBBookDocument struct {
 	UpdatedAt primitive.DateTime `bson:"UpdatedAt"`
 }
 
+type mongoDBFeltrinelliProduct struct {
+	URL string `bson:"URL"`
+}
+
 func disconnectFromMongo() {
 	err := client.Disconnect(context.TODO())
 	if err != nil {
@@ -369,5 +373,59 @@ func setNewURLAndIsBook(originalURL string, URL string, isBook bool) {
 	_, err = feltrinelliBooksCollection.UpdateOne(context.TODO(), filter, updateBook)
 	if err != nil {
 		log.Fatalf("Failed to update URL for book: %v", err)
+	}
+}
+
+func removeAllUnseenProductsAndBook(lastSeen time.Time) {
+	filter := bson.M{
+		"LastSeen": bson.M{
+			"$ne": lastSeen,
+		},
+	}
+
+	cursor, err := feltrinelliProductsCollection.Find(context.TODO(), filter)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(cur *mongo.Cursor, ctx context.Context) {
+		err := cur.Close(ctx)
+		if err != nil {
+			_, err := fmt.Fprintln(os.Stderr, "Error occurred while closing cursor", err)
+			panic(err)
+		}
+	}(cursor, context.TODO())
+
+	deleteModels := make([]mongo.WriteModel, 0)
+	for cursor.Next(context.TODO()) {
+		var result mongoDBFeltrinelliProduct
+		err := cursor.Decode(&result)
+		if err != nil {
+			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
+			if err != nil {
+				panic(err)
+			}
+		}
+		model := mongo.NewDeleteOneModel()
+		model.SetFilter(bson.M{"URL": result.URL})
+		deleteModels = append(deleteModels, model)
+	}
+
+	if len(deleteModels) == 0 {
+		return
+	}
+
+	bulkOption := options.BulkWrite().SetOrdered(false)
+	// Delete products with given URLs
+	_, err = feltrinelliProductsCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
+	if err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
+		panic(err)
+	}
+
+	// Delete books with given URLs
+	_, err = feltrinelliBooksCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
+	if err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
+		panic(err)
 	}
 }
