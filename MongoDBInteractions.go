@@ -311,7 +311,6 @@ func insertFeltrinelliScrapedBook(feltrinelliScrapedBook *FeltrinelliScrapedBook
 		{Key: "URL", Value: feltrinelliScrapedBook.BuyInfos.URL},
 		{Key: "ISBN", Value: feltrinelliScrapedBook.BuyInfos.ISBN},
 		{Key: "Title", Value: feltrinelliScrapedBook.BuyInfos.Title},
-		{Key: "AvailabilityStickyText", Value: feltrinelliScrapedBook.BuyInfos.AvailabilityStickyText},
 		{Key: "Availability", Value: feltrinelliScrapedBook.BuyInfos.Availability},
 		{Key: "Price", Value: formattedPrice},
 		{Key: "Details", Value: feltrinelliScrapedBook.Details},

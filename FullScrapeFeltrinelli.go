@@ -67,17 +67,15 @@ type InventoryJSON struct {
 }
 
 type AvailabilityJSON struct {
-	Text              string `json:"Text"`
-	StickyDesktopText string `json:"AvailabilityStickyText"`
+	Text string `json:"Text"`
 }
 
 type BuyInfos struct {
-	ISBN                   string
-	Price                  json.Number `json:"Price"`
-	Availability           string      `json:"Text"`
-	AvailabilityStickyText string      `json:"AvailabilityStickyText"`
-	Title                  string
-	URL                    string
+	ISBN         string
+	Price        json.Number `json:"Price"`
+	Availability string      `json:"Text"`
+	Title        string
+	URL          string
 }
 
 type DescriptionData struct {
@@ -335,11 +333,10 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 		title := e.Attr(":product-title")
 		title = title[1 : len(title)-1]
 		buyInfos := BuyInfos{Price: inventoryJSON.Price,
-			Title:                  title,
-			Availability:           availabilityJSON.Text,
-			AvailabilityStickyText: availabilityJSON.StickyDesktopText,
-			URL:                    e.Request.URL.String(),
-			ISBN:                   EAN}
+			Title:        title,
+			Availability: availabilityJSON.Text,
+			URL:          e.Request.URL.String(),
+			ISBN:         EAN}
 		//ImageURL: "https://www.lafeltrinelli.it/images/" + EAN + "_0_536_0_75.jpg"
 		booksMapLock.Lock()
 		booksMap[EAN] = &FeltrinelliScrapedBook{}
