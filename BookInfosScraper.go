@@ -222,7 +222,10 @@ func scrapeRepricerBooks(dbPublishedBooks map[string]BookFull, booksChannel chan
 		Timeout:   30 * time.Second,
 	})
 	c.SetRequestTimeout(30 * time.Second)
-
+	err = c.Limit(&colly.LimitRule{Delay: 5 * time.Second})
+	if err != nil {
+		return
+	}
 	q, _ := queue.New(1, &queue.InMemoryQueueStorage{MaxSize: len(dbPublishedBooks)})
 
 	// Adding all URLs to the queue
