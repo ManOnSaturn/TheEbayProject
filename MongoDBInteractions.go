@@ -55,9 +55,9 @@ var bestsellersAmazonCollection *mongo.Collection
 func connectToMongo() {
 	var clientOptions *options.ClientOptions
 	if runtime.GOOS == "windows" {
-		clientOptions = options.Client().ApplyURI("mongodb://192.168.188.45:27017/")
+		clientOptions = options.Client().ApplyURI("mongodb://admin:asdfadfhxvbxbsdfghs@192.168.188.45:30000/admin")
 	} else {
-		clientOptions = options.Client().ApplyURI("mongodb://localhost:27017/")
+		clientOptions = options.Client().ApplyURI("mongodb://admin:asdfadfhxvbxbsdfghs@localhost:30000/admin")
 	}
 	var err error
 	client, err = mongo.Connect(context.TODO(), clientOptions)
