@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"golang.org/x/net/context"
 	"os"
 	"os/exec"
 	"time"
@@ -13,20 +12,6 @@ func repricer() {
 
 	dbPublishedBooks := make(map[string]BookFull, 5000)
 	getAllPublishedBooks(dbPublishedBooks)
-
-	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
-	defer cancel()
-	scrapingFinishedChannel := make(chan bool)
-
-	go func() {
-		select {
-		case <-scrapingFinishedChannel:
-			cancel()
-		case <-ctx.Done():
-			panic("Repricing timed out")
-		}
-	}()
 
 	booksChannel := make(chan BookPartial, 60)
 
@@ -50,7 +35,6 @@ func repricer() {
 		}
 	}
 
-	scrapingFinishedChannel <- true
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
 
 	bulkInsertBooksToUpdate(booksToUpdate)
