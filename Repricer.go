@@ -10,8 +10,7 @@ import (
 func repricer() {
 	startTime := time.Now()
 
-	dbPublishedBooks := make(map[string]BookFull, 5000)
-	getAllPublishedBooks(dbPublishedBooks)
+	dbPublishedBooks := getAllPublishedBooks()
 
 	booksChannel := make(chan BookPartial, 60)
 
@@ -20,29 +19,27 @@ func repricer() {
 	var booksToUpdate []BookToUpdate
 	for bookInfo := range booksChannel {
 		dbBook := dbPublishedBooks[bookInfo.ISBN]
-		bookToUpdate := BookToUpdate{bookInfo.ISBN, bookInfo.Price, false, bookInfo.Available, false}
-		if dbBook.Available != bookInfo.Available {
-			bookToUpdate.AvailabilityChanged = true
-			fmt.Println("Availability changed to ", bookInfo.Available, " for ", bookInfo.ISBN)
-		}
-		if dbBook.Price != bookInfo.Price {
-			bookToUpdate.PriceChanged = true
-			fmt.Println("Price changed to ", bookInfo.Price, " for ", bookInfo.ISBN)
-		}
-
-		if bookToUpdate.AvailabilityChanged || bookToUpdate.PriceChanged {
-			booksToUpdate = append(booksToUpdate, bookToUpdate)
-		}
+		booksToUpdate = addBookToUpdateToSlice(bookInfo, dbBook, booksToUpdate)
 	}
 
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
 
-	bulkInsertBooksToUpdate(booksToUpdate)
+	bulkInsertBooksToUpdate(booksToUpdate, false)
 	fmt.Println("Finished updating ", len(booksToUpdate), " books.")
 
+	startPythonRepricer(booksToUpdate, false)
+}
+
+func startPythonRepricer(booksToUpdate []BookToUpdate, isFeltrinelli bool) {
 	// Start python repricer if there is any book to update.
 	if len(booksToUpdate) > 0 {
-		cmd := exec.Command("/bin/bash", "/home/mattia/repricer/start_repricer.sh", "--repricer")
+		var repricerString string
+		if isFeltrinelli {
+			repricerString = "--feltrinelliRepricer"
+		} else {
+			repricerString = "--repricer"
+		}
+		cmd := exec.Command("/bin/bash", "/home/mattia/repricer/start_repricer.sh", repricerString)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			_, err := fmt.Fprintf(os.Stderr, "Error in starting repricer script from GoLang to Python: %s", err)
@@ -53,4 +50,21 @@ func repricer() {
 		}
 		fmt.Printf("%s\n", output)
 	}
+}
+
+func addBookToUpdateToSlice(bookInfo BookPartial, dbBook BookFull, booksToUpdate []BookToUpdate) []BookToUpdate {
+	bookToUpdate := BookToUpdate{bookInfo.ISBN, bookInfo.Price, false, bookInfo.Available, false}
+	if dbBook.Available != bookInfo.Available {
+		bookToUpdate.AvailabilityChanged = true
+		fmt.Println("Availability changed to ", bookInfo.Available, " for ", bookInfo.ISBN)
+	}
+	if dbBook.Price != bookInfo.Price {
+		bookToUpdate.PriceChanged = true
+		fmt.Println("Price changed to ", bookInfo.Price, " for ", bookInfo.ISBN)
+	}
+
+	if bookToUpdate.AvailabilityChanged || bookToUpdate.PriceChanged {
+		booksToUpdate = append(booksToUpdate, bookToUpdate)
+	}
+	return booksToUpdate
 }

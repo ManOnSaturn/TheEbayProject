@@ -31,8 +31,53 @@ type mongoDBBookDocument struct {
 	UpdatedAt primitive.DateTime `bson:"UpdatedAt"`
 }
 
+type EbayData struct {
+	ISBN           string `bson:"ISBN"`
+	PublishedPrice string `bson:"PublishedPrice"`
+	Published      bool   `bson:"Published"`
+	ListingId      string `bson:"ListingId"`
+	OfferId        string `bson:"OfferId"`
+	EbayImageURL   string `bson:"EbayImageURL"`
+	MarketIn       string `bson:"MarketIn"`
+}
+
+type Details struct {
+	AnnoEdizione    string `json:"anno_edizione"`
+	Autore          string `json:"autore"`
+	Collana         string `json:"collana"`
+	Curatore        string `json:"curatore"`
+	Editore         string `json:"editore"`
+	Edizione        string `json:"edizione"`
+	EtaDiLettura    string `json:"eta_di_lettura"`
+	Formato         string `json:"formato"`
+	Illustratore    string `json:"illustratore"`
+	InCommercioDal  string `json:"in_commercio_dal"`
+	Pagine          string `json:"pagine"`
+	Tipo            string `json:"tipo"`
+	TitoloOriginale string `json:"titolo_originale"`
+	Traduttore      string `json:"traduttore"`
+}
+
+type FeltrinelliBook struct {
+	ISBN             string  `json:"isbn"`
+	Availability     string  `json:"availability"`
+	Details          Details `json:"details"`
+	LongDescription  string  `json:"long_description"`
+	ShortDescription string  `json:"short_description"`
+	Price            string  `json:"price"`
+	Title            string  `json:"title"`
+	URL              string  `json:"url"`
+	Category         string  `json:"category"`
+}
+
+type EbayDataWithFeltrinelliBook struct {
+	EbayData        EbayData        `bson:"EbayData"`
+	FeltrinelliBook FeltrinelliBook `bson:"FeltrinelliBook"`
+}
+
 type mongoDBFeltrinelliProduct struct {
 	URL string `bson:"URL"`
+	EAN string `bson:"EAN"`
 }
 
 func disconnectFromMongo() {
@@ -50,7 +95,9 @@ var feltrinelliProductsCollection *mongo.Collection
 var feltrinelliBooksCollection *mongo.Collection
 var booksCollection *mongo.Collection
 var booksToUpdateCollection *mongo.Collection
+var feltrinelliBooksToUpdateCollection *mongo.Collection
 var bestsellersAmazonCollection *mongo.Collection
+var ebayDataCollection *mongo.Collection
 
 func connectToMongo() {
 	var clientOptions *options.ClientOptions
@@ -74,7 +121,9 @@ func connectToMongo() {
 	feltrinelliBooksCollection = client.Database("Mondadori").Collection("FeltrinelliBooks")
 	booksCollection = client.Database("Mondadori").Collection("Books")
 	booksToUpdateCollection = client.Database("Mondadori").Collection("BooksToUpdate")
+	feltrinelliBooksToUpdateCollection = client.Database("Mondadori").Collection("FeltrinelliBooksToUpdate")
 	bestsellersAmazonCollection = client.Database("Mondadori").Collection("BestsellersAmazon")
+	ebayDataCollection = client.Database("Mondadori").Collection("EbayData")
 
 	fmt.Println("Pinged mongodb deployment. Successfully connected to MongoDB!")
 }
@@ -115,7 +164,7 @@ func insertBooks(books []*BookFull) {
 	}
 }
 
-func bulkInsertBooksToUpdate(books []BookToUpdate) {
+func bulkInsertBooksToUpdate(books []BookToUpdate, isFeltrinelli bool) {
 	if len(books) == 0 {
 		return
 	}
@@ -135,8 +184,13 @@ func bulkInsertBooksToUpdate(books []BookToUpdate) {
 		upsert.SetUpsert(true)
 		operations = append(operations, upsert)
 	}
-
-	_, err := booksToUpdateCollection.BulkWrite(context.TODO(), operations)
+	var collection *mongo.Collection
+	if isFeltrinelli {
+		collection = feltrinelliBooksToUpdateCollection
+	} else {
+		collection = booksToUpdateCollection
+	}
+	_, err := collection.BulkWrite(context.TODO(), operations)
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred while upserting books in MongoDB:", err)
 		if err != nil {
@@ -215,8 +269,10 @@ func getAllDBBooks(dbBooks map[string]BookFull) {
 	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
 }
 
-func getAllPublishedBooks(dbBooks map[string]BookFull) {
+func getAllPublishedBooks() map[string]BookFull {
 	startTime := time.Now()
+
+	booksFromDB := make(map[string]BookFull, 5000)
 	// Find all documents
 	cur, err := booksCollection.Find(context.TODO(), bson.D{{"ListingId", bson.D{{"$exists", true}}}})
 	if err != nil {
@@ -240,12 +296,62 @@ func getAllPublishedBooks(dbBooks map[string]BookFull) {
 			}
 		}
 
-		dbBooks[result.ISBN] = BookFull{ISBN: result.ISBN, Published: result.Published, Title: result.Title,
+		booksFromDB[result.ISBN] = BookFull{ISBN: result.ISBN, Published: result.Published, Title: result.Title,
 			Available: result.Available, Price: result.Price, URL: result.URL, ImageURL: result.ImageURL,
 			Author: result.Author, Category: result.Category, Variant: result.Variant, Editor: result.Editor,
 			Language: result.Language}
 	}
+
 	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
+
+	return booksFromDB
+}
+
+func getAllBooksOnEbay() map[string]EbayDataWithFeltrinelliBook {
+	startTime := time.Now()
+
+	// Define the aggregation pipeline
+	pipeline := bson.A{
+		bson.D{
+			{Key: "$project", Value: bson.D{
+				{Key: "EbayData", Value: "$$ROOT"},
+			}},
+		},
+		bson.D{
+			{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: "FeltrinelliBooks"},
+				{Key: "localField", Value: "EbayData.ISBN"},
+				{Key: "foreignField", Value: "ISBN"},
+				{Key: "as", Value: "FeltrinelliBook"},
+			}},
+		},
+		bson.D{
+			{Key: "$unwind", Value: bson.D{
+				{Key: "path", Value: "FeltrinelliBook"},
+			}},
+		},
+	}
+
+	// Execute the aggregation pipeline
+	cursor, err := ebayDataCollection.Aggregate(context.TODO(), pipeline)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer cursor.Close(context.TODO())
+
+	// Iterate through the results
+	var results []EbayDataWithFeltrinelliBook
+	if err = cursor.All(context.TODO(), &results); err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
+
+	outputMap := make(map[string]EbayDataWithFeltrinelliBook, len(results))
+	for _, result := range results {
+		outputMap[result.FeltrinelliBook.ISBN] = EbayDataWithFeltrinelliBook{FeltrinelliBook: result.FeltrinelliBook, EbayData: result.EbayData}
+	}
+	return outputMap
 }
 
 func setProductIsBook(URL string, isBook bool) {
@@ -375,7 +481,9 @@ func setNewURLAndIsBook(originalURL string, URL string, isBook bool) {
 	}
 }
 
-func removeAllUnseenProductsAndBook(lastSeen time.Time) {
+func removeAllUnseenProductsAndBooks(lastSeen time.Time) {
+	fmt.Println("Removing all unseen products")
+	startTime := time.Now()
 	filter := bson.M{
 		"LastSeen": bson.M{
 			"$ne": lastSeen,
@@ -395,6 +503,7 @@ func removeAllUnseenProductsAndBook(lastSeen time.Time) {
 	}(cursor, context.TODO())
 
 	deleteModels := make([]mongo.WriteModel, 0)
+	feltrinelliBooksISBNs := make([]string, 0)
 	for cursor.Next(context.TODO()) {
 		var result mongoDBFeltrinelliProduct
 		err := cursor.Decode(&result)
@@ -407,13 +516,21 @@ func removeAllUnseenProductsAndBook(lastSeen time.Time) {
 		model := mongo.NewDeleteOneModel()
 		model.SetFilter(bson.M{"URL": result.URL})
 		deleteModels = append(deleteModels, model)
+		var feltrinelliBook FeltrinelliBook
+		findOneError := feltrinelliBooksCollection.FindOne(context.TODO(), bson.M{"URL": result.URL}).Decode(&feltrinelliBook)
+		if findOneError == nil {
+			feltrinelliBooksISBNs = append(feltrinelliBooksISBNs, feltrinelliBook.ISBN)
+		}
 	}
 
 	if len(deleteModels) == 0 {
 		return
 	}
 
+	fmt.Printf("Removing %d products.\n", len(deleteModels))
+
 	bulkOption := options.BulkWrite().SetOrdered(false)
+
 	// Delete products with given URLs
 	_, err = feltrinelliProductsCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
 	if err != nil {
@@ -427,4 +544,29 @@ func removeAllUnseenProductsAndBook(lastSeen time.Time) {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
 		panic(err)
 	}
+
+	// Change availability if book is published
+	var booksToUpdateModels []mongo.WriteModel
+	for _, ISBN := range feltrinelliBooksISBNs {
+		documents, _ := ebayDataCollection.CountDocuments(context.TODO(), bson.M{"ISBN": ISBN})
+		if documents > 0 {
+			model := mongo.NewUpdateOneModel()
+			model.SetFilter(bson.M{"ISBN": ISBN})
+			model.SetUpsert(true)
+			model.SetUpdate(bson.M{"$set": bson.M{"ISBN": ISBN, "Available": "Rimosso", "AvailabilityChanged": true, "Price": "", "PriceChanged": false}})
+			booksToUpdateModels = append(booksToUpdateModels, model)
+		}
+	}
+
+	// TODO reason about whether this is actually needed, or needs to be checked during repricing, or both
+	if len(booksToUpdateModels) > 0 {
+		fmt.Println("Storing books which disappeared as books to update")
+		_, err = feltrinelliBooksToUpdateCollection.BulkWrite(context.TODO(), booksToUpdateModels)
+		if err != nil {
+			_, err = fmt.Fprintln(os.Stderr, "Error occurred during bulk write operation:", err)
+			return
+		}
+	}
+
+	fmt.Println("Removed all unseen products in ", time.Since(startTime).Seconds(), "seconds.")
 }

@@ -157,17 +157,10 @@ func scrapeAllXMLs() {
 		for _, entry := range urlSet.URLs {
 			filter := bson.M{"URL": entry.Loc}
 
-			// Parse the string into time.Time
-			lastMod, err := time.Parse(time.RFC3339, entry.LastMod)
-			if err != nil {
-				log.Fatalf("Failed to parse date: %v", err)
-			}
-
 			// Create the update document
 			update := bson.M{
 				"$set": bson.M{
 					"URL":      entry.Loc,
-					"LastMod":  lastMod,
 					"EAN":      getEAN(entry.Loc),
 					"LastSeen": lastSeen,
 				},
@@ -192,16 +185,21 @@ func scrapeAllXMLs() {
 
 	// Execute remaining models in bulk
 	if len(models) > 0 {
+		fmt.Println("Processing last", len(models), " into the DB.")
 		bulkWriteFeltrinelliProducts(models)
 	}
 
-	removeAllUnseenProductsAndBook(lastSeen)
+	removeAllUnseenProductsAndBooks(lastSeen)
 }
 
 func getNewProducts(urlsChan chan string) {
 	// Filter for documents where the field 'IsBook' does not exist
 	filter := bson.M{"IsBook": bson.M{"$exists": false}}
 	todoContext := context.TODO()
+
+	documentsCount, _ := feltrinelliProductsCollection.CountDocuments(todoContext, filter)
+	fmt.Println("Number of new products: ", documentsCount)
+
 	opts := options.Find().SetBatchSize(1000)
 	cursor, err := feltrinelliProductsCollection.Find(todoContext, filter, opts)
 	if err != nil {
