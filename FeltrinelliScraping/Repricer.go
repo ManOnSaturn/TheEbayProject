@@ -13,19 +13,19 @@ import (
 	"time"
 )
 
-func FeltrinelliRepricer() {
+func Repricer() {
 	startTime := time.Now()
 
 	ebayDataWithFeltrinelliBooks := MongoDBInteractions.GetAllBooksOnEbay()
 
 	bookPartialsChannel := make(chan DataTypes.BookPartial, 60)
 
-	go scrapeRepricerBooksFeltrinelli(ebayDataWithFeltrinelliBooks, bookPartialsChannel)
+	go scrapeRepricerBooks(ebayDataWithFeltrinelliBooks, bookPartialsChannel)
 
 	var booksToUpdate []DataTypes.BookToUpdate
 	for bookPartial := range bookPartialsChannel {
 		ebayDataWithFeltrinelliBook := ebayDataWithFeltrinelliBooks[bookPartial.ISBN]
-		booksToUpdate = addBookToUpdateToSliceWithFeltrinelli(bookPartial, ebayDataWithFeltrinelliBook.FeltrinelliBook, booksToUpdate)
+		booksToUpdate = addBookToUpdateToSlice(bookPartial, ebayDataWithFeltrinelliBook.FeltrinelliBook, booksToUpdate)
 	}
 
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
@@ -36,7 +36,7 @@ func FeltrinelliRepricer() {
 	MondadoriScraping.StartPythonRepricer(booksToUpdate, true)
 }
 
-func addBookToUpdateToSliceWithFeltrinelli(bookInfo DataTypes.BookPartial, feltrinelliBook DataTypes.FeltrinelliBook, booksToUpdate []DataTypes.BookToUpdate) []DataTypes.BookToUpdate {
+func addBookToUpdateToSlice(bookInfo DataTypes.BookPartial, feltrinelliBook DataTypes.FeltrinelliBook, booksToUpdate []DataTypes.BookToUpdate) []DataTypes.BookToUpdate {
 	bookToUpdate := DataTypes.BookToUpdate{ISBN: bookInfo.ISBN, Price: bookInfo.Price, PriceChanged: false, Available: bookInfo.Available, AvailabilityChanged: false}
 	if feltrinelliBook.Availability != bookInfo.Available {
 		bookToUpdate.AvailabilityChanged = true
@@ -53,7 +53,7 @@ func addBookToUpdateToSliceWithFeltrinelli(bookInfo DataTypes.BookPartial, feltr
 	return booksToUpdate
 }
 
-func scrapeRepricerBooksFeltrinelli(ebayDataWithFeltrinelliBooks map[string]DataTypes.EbayDataWithFeltrinelliBook, bookPartialChannel chan<- DataTypes.BookPartial) {
+func scrapeRepricerBooks(ebayDataWithFeltrinelliBooks map[string]DataTypes.EbayDataWithFeltrinelliBook, bookPartialChannel chan<- DataTypes.BookPartial) {
 	fakeChrome := req.DefaultClient().ImpersonateChrome()
 	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")), colly.Async(true))
 	c.SetClient(&http.Client{

@@ -35,7 +35,7 @@ func main() {
 			log.Println(http.ListenAndServe("0.0.0.0:8888", nil))
 			panic("what")
 		}()
-		FeltrinelliScraping.FullScrapeFeltrinelli()
+		FeltrinelliScraping.FullScrape()
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "--feltrinelliRepricer" {
@@ -43,7 +43,7 @@ func main() {
 			log.Println(http.ListenAndServe("0.0.0.0:8888", nil))
 			panic("what")
 		}()
-		FeltrinelliScraping.FeltrinelliRepricer()
+		FeltrinelliScraping.Repricer()
 	}
 
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")

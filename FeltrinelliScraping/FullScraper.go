@@ -378,7 +378,7 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *DataTypes.Fel
 	close(fullBooksChan)
 }
 
-func FullScrapeFeltrinelli() {
+func FullScrape() {
 	startTime := time.Now()
 
 	scrapeAllXMLs()
@@ -390,7 +390,7 @@ func FullScrapeFeltrinelli() {
 	fullBooksChan := make(chan *DataTypes.FeltrinelliScrapedBook)
 
 	go getProductInfos(urlsChan, fullBooksChan)
-	handleFeltrinelliScrapedBooks(fullBooksChan)
+	handleScrapedBooks(fullBooksChan)
 
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
 }
@@ -400,7 +400,7 @@ func testSendingProducts(urlsChan chan<- string) {
 	close(urlsChan)
 }
 
-func handleFeltrinelliScrapedBooks(fullBooksChan <-chan *DataTypes.FeltrinelliScrapedBook) {
+func handleScrapedBooks(fullBooksChan <-chan *DataTypes.FeltrinelliScrapedBook) {
 	startTime := time.Now()
 	lastTime := startTime
 	count := 0
