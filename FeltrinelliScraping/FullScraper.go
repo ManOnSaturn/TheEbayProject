@@ -4,7 +4,6 @@ import (
 	"Scraper/DataTypes"
 	"Scraper/MongoDBInteractions"
 	"context"
-	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"github.com/gocolly/colly/v2"
@@ -22,6 +21,23 @@ import (
 	"sync"
 	"time"
 )
+
+func FullScrape() {
+	startTime := time.Now()
+
+	scrapeAllXMLs()
+
+	urlsChan := make(chan string)
+	go getNewProducts(urlsChan)
+	//go testSendingProducts(urlsChan)
+
+	fullBooksChan := make(chan *DataTypes.FeltrinelliScrapedBook)
+
+	go getProductInfos(urlsChan, fullBooksChan)
+	handleScrapedBooks(fullBooksChan)
+
+	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
+}
 
 func downloadAndParseXML(url string) (*DataTypes.UrlSet, error) {
 	resp, err := http.Get(url)
@@ -180,19 +196,6 @@ func getNewProducts(urlsChan chan string) {
 		log.Fatal(err)
 	}
 	close(urlsChan) // Close the channel when done
-}
-
-func UnmarshalJSON[T any](data []byte, target *T) error {
-	err := json.Unmarshal(data, target)
-	if err != nil {
-		return fmt.Errorf("error unmarshaling JSON into %T: %w", target, err)
-	}
-	return nil
-}
-
-func GetEANFromPath(path string) string {
-	parts := strings.Split(path, "/")
-	return parts[len(parts)-1]
 }
 
 func cleanDescription(input string) string {
@@ -376,23 +379,6 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *DataTypes.Fel
 	}
 	c.Wait()
 	close(fullBooksChan)
-}
-
-func FullScrape() {
-	startTime := time.Now()
-
-	scrapeAllXMLs()
-
-	urlsChan := make(chan string)
-	go getNewProducts(urlsChan)
-	//go testSendingProducts(urlsChan)
-
-	fullBooksChan := make(chan *DataTypes.FeltrinelliScrapedBook)
-
-	go getProductInfos(urlsChan, fullBooksChan)
-	handleScrapedBooks(fullBooksChan)
-
-	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
 }
 
 func testSendingProducts(urlsChan chan<- string) {

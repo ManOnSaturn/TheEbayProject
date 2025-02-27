@@ -16,7 +16,7 @@ import (
 func Repricer() {
 	startTime := time.Now()
 
-	ebayDataWithFeltrinelliBooks := MongoDBInteractions.GetAllBooksOnEbay()
+	ebayDataWithFeltrinelliBooks := MongoDBInteractions.GetAllFeltrinelliBooksOnEbay()
 
 	bookPartialsChannel := make(chan DataTypes.BookPartial, 60)
 
@@ -98,7 +98,7 @@ func scrapeRepricerBooks(ebayDataWithFeltrinelliBooks map[string]DataTypes.EbayD
 			return
 		}
 
-		price, _ := MongoDBInteractions.FormatNumber(inventoryJSON.Price)
+		price, _ := MongoDBInteractions.FormatNumberIntoString(inventoryJSON.Price)
 		booksMap[EAN] = DataTypes.BookPartial{
 			Price:     price,
 			Available: availabilityJSON.Text,
