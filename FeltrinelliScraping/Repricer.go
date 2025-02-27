@@ -2,8 +2,8 @@ package FeltrinelliScraping
 
 import (
 	"Scraper/DataTypes"
-	"Scraper/MondadoriScraping"
 	"Scraper/MongoDBInteractions"
+	"Scraper/PythonInteractions"
 	"fmt"
 	"github.com/gocolly/colly/v2"
 	"github.com/imroc/req/v3"
@@ -33,7 +33,7 @@ func Repricer() {
 	MongoDBInteractions.BulkInsertBooksToUpdate(booksToUpdate, true)
 	fmt.Println("Finished updating ", len(booksToUpdate), " books.")
 
-	MondadoriScraping.StartPythonRepricer(booksToUpdate, true)
+	PythonInteractions.StartPythonRepricer(booksToUpdate, true)
 }
 
 func addBookToUpdateToSlice(bookInfo DataTypes.BookPartial, feltrinelliBook DataTypes.FeltrinelliBook, booksToUpdate []DataTypes.BookToUpdate) []DataTypes.BookToUpdate {
