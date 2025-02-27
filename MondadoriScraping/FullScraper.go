@@ -1,12 +1,14 @@
-package main
+package MondadoriScraping
 
 import (
+	"Scraper/DataTypes"
+	"Scraper/MongoDBInteractions"
 	"fmt"
 	"sync"
 	"time"
 )
 
-func fullScrape() {
+func FullScrape() {
 	startTime := time.Now()
 
 	//// Create a context with timeout
@@ -23,11 +25,11 @@ func fullScrape() {
 	//	}
 	//}()
 
-	booksChannel := make(chan BookFull, 60)
+	booksChannel := make(chan DataTypes.BookFull, 60)
 
 	go getBooks(booksChannel)
 
-	bookSet := make(map[BookFull]bool, 750000)
+	bookSet := make(map[DataTypes.BookFull]bool, 750000)
 
 	for bookInfo := range booksChannel {
 		bookSet[bookInfo] = true
@@ -43,20 +45,20 @@ func fullScrape() {
 	mongoDBOperationsWG.Add(1)
 	go func() {
 		defer mongoDBOperationsWG.Done()
-		insertBooks(booksToAdd)
+		MongoDBInteractions.InsertBooks(booksToAdd)
 		fmt.Println("Finished inserting new books in DB.")
 	}()
 
 	mongoDBOperationsWG.Wait()
-	bulkUpdateBooks(booksToUpdate)
+	MongoDBInteractions.BulkUpdateBooks(booksToUpdate)
 	fmt.Println("Finished updating books in DB.")
 }
 
-func getBooksToAddAndUpdate(scrapedBooksSet map[BookFull]bool) ([]*BookFull, []*BookFull) {
-	dbBooks := make(map[string]BookFull, 750000)
-	getAllDBBooks(dbBooks)
-	var booksToAdd []*BookFull
-	var booksToUpdate []*BookFull
+func getBooksToAddAndUpdate(scrapedBooksSet map[DataTypes.BookFull]bool) ([]*DataTypes.BookFull, []*DataTypes.BookFull) {
+	dbBooks := make(map[string]DataTypes.BookFull, 750000)
+	MongoDBInteractions.GetAllDBBooks(dbBooks)
+	var booksToAdd []*DataTypes.BookFull
+	var booksToUpdate []*DataTypes.BookFull
 
 	fmt.Println("Creating lists of books to create and books to update.")
 	startTime := time.Now()

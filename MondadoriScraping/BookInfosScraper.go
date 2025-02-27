@@ -1,6 +1,7 @@
-package main
+package MondadoriScraping
 
 import (
+	"Scraper/DataTypes"
 	"fmt"
 	"github.com/gocolly/colly/v2"
 	"github.com/gocolly/colly/v2/queue"
@@ -18,7 +19,7 @@ type MondadoriPageInfo struct {
 	PageNumbers int
 }
 
-func getBooks(booksChannel chan<- BookFull) {
+func getBooks(booksChannel chan<- DataTypes.BookFull) {
 	var err error
 	pageInfos := []MondadoriPageInfo{
 		{URL: "https://www.mondadoristore.it/libri/italiani/Ambiente-e-Animali/genG001/"},
@@ -111,7 +112,7 @@ func getBooks(booksChannel chan<- BookFull) {
 			bookVariant := element.ChildAttr("div.info-data-product", "data-variant")
 			bookEditor := element.ChildAttr("div.info-data-product", "data-brand")
 			bookImageURL := element.ChildAttr("img.image.first-img.product-img.is-book.maxHeightLarge", "src")
-			booksChannel <- BookFull{
+			booksChannel <- DataTypes.BookFull{
 				ISBN:      bookISBN,
 				Title:     bookTitle,
 				Available: bookAvailableText,
@@ -212,7 +213,7 @@ func shuffle(slice []string) {
 	}
 }
 
-func scrapeRepricerBooks(dbPublishedBooks map[string]BookFull, booksChannel chan<- BookPartial) {
+func scrapeRepricerBooks(dbPublishedBooks map[string]DataTypes.BookFull, booksChannel chan<- DataTypes.BookPartial) {
 	var err error
 	// Create colly collector, while impersonating chrome.
 	fakeChrome := req.DefaultClient().ImpersonateChrome()
@@ -260,7 +261,7 @@ func scrapeRepricerBooks(dbPublishedBooks map[string]BookFull, booksChannel chan
 		price := element.ChildAttr("span.new-price.new-detail-price", "content")
 		bookAvailableText := element.ChildText("span.big.lightGreen strong")
 		ISBN := element.ChildAttr("div.info-data-product", "data-dimension8")
-		booksChannel <- BookPartial{
+		booksChannel <- DataTypes.BookPartial{
 			ISBN:      ISBN,
 			Price:     price,
 			Available: bookAvailableText,

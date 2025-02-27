@@ -1,22 +1,24 @@
-package main
+package MondadoriScraping
 
 import (
+	"Scraper/DataTypes"
+	"Scraper/MongoDBInteractions"
 	"fmt"
 	"os"
 	"os/exec"
 	"time"
 )
 
-func repricer() {
+func Repricer() {
 	startTime := time.Now()
 
-	dbPublishedBooks := getAllPublishedBooks()
+	dbPublishedBooks := MongoDBInteractions.GetAllPublishedBooks()
 
-	booksChannel := make(chan BookPartial, 60)
+	booksChannel := make(chan DataTypes.BookPartial, 60)
 
 	go scrapeRepricerBooks(dbPublishedBooks, booksChannel)
 
-	var booksToUpdate []BookToUpdate
+	var booksToUpdate []DataTypes.BookToUpdate
 	for bookInfo := range booksChannel {
 		dbBook := dbPublishedBooks[bookInfo.ISBN]
 		booksToUpdate = addBookToUpdateToSlice(bookInfo, dbBook, booksToUpdate)
@@ -24,13 +26,13 @@ func repricer() {
 
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
 
-	bulkInsertBooksToUpdate(booksToUpdate, false)
+	MongoDBInteractions.BulkInsertBooksToUpdate(booksToUpdate, false)
 	fmt.Println("Finished updating ", len(booksToUpdate), " books.")
 
-	startPythonRepricer(booksToUpdate, false)
+	StartPythonRepricer(booksToUpdate, false)
 }
 
-func startPythonRepricer(booksToUpdate []BookToUpdate, isFeltrinelli bool) {
+func StartPythonRepricer(booksToUpdate []DataTypes.BookToUpdate, isFeltrinelli bool) {
 	// Start python repricer if there is any book to update.
 	if len(booksToUpdate) > 0 {
 		var repricerString string
@@ -52,8 +54,8 @@ func startPythonRepricer(booksToUpdate []BookToUpdate, isFeltrinelli bool) {
 	}
 }
 
-func addBookToUpdateToSlice(bookInfo BookPartial, dbBook BookFull, booksToUpdate []BookToUpdate) []BookToUpdate {
-	bookToUpdate := BookToUpdate{bookInfo.ISBN, bookInfo.Price, false, bookInfo.Available, false}
+func addBookToUpdateToSlice(bookInfo DataTypes.BookPartial, dbBook DataTypes.BookFull, booksToUpdate []DataTypes.BookToUpdate) []DataTypes.BookToUpdate {
+	bookToUpdate := DataTypes.BookToUpdate{bookInfo.ISBN, bookInfo.Price, false, bookInfo.Available, false}
 	if dbBook.Available != bookInfo.Available {
 		bookToUpdate.AvailabilityChanged = true
 		fmt.Println("Availability changed to ", bookInfo.Available, " for ", bookInfo.ISBN)

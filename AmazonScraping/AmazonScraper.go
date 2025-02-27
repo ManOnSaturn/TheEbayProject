@@ -1,6 +1,7 @@
-package main
+package AmazonScraping
 
 import (
+	"Scraper/MongoDBInteractions"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -26,7 +27,7 @@ type Item struct {
 func getPrunedASINs(ASINs []string) []string {
 	prunedASINs := make([]string, 0)
 	for _, ASIN := range ASINs {
-		count, err := bestsellersAmazonCollection.CountDocuments(context.TODO(), bson.D{{"ASIN", ASIN}})
+		count, err := MongoDBInteractions.BestsellersAmazonCollection.CountDocuments(context.TODO(), bson.D{{"ASIN", ASIN}})
 		if err != nil {
 			break
 		}
@@ -38,7 +39,7 @@ func getPrunedASINs(ASINs []string) []string {
 	return prunedASINs
 }
 
-func scrapeBestsellers() {
+func ScrapeBestsellers() {
 	asins := getASINs()
 	prunedASINs := getPrunedASINs(asins)
 	ASINISBNPairs, kindleASINs := getISBNs(prunedASINs)
@@ -65,7 +66,7 @@ func insertASINsKindle(asinsKindle []string) *mongo.BulkWriteResult {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	// Execute the bulk write
-	result, err := bestsellersAmazonCollection.BulkWrite(ctx, bulkOps)
+	result, err := MongoDBInteractions.BestsellersAmazonCollection.BulkWrite(ctx, bulkOps)
 	if err != nil {
 		log.Fatalf("Failed to execute bulk write: %v", err)
 	}
@@ -87,7 +88,7 @@ func insertISBNs(ASINISBNPairs []ASINISBNPair) *mongo.BulkWriteResult {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	// Execute the bulk write
-	result, err := bestsellersAmazonCollection.BulkWrite(ctx, bulkOps)
+	result, err := MongoDBInteractions.BestsellersAmazonCollection.BulkWrite(ctx, bulkOps)
 	if err != nil {
 		log.Fatalf("Failed to execute bulk write: %v", err)
 	}

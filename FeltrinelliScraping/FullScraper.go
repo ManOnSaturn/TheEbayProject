@@ -1,6 +1,8 @@
-package main
+package FeltrinelliScraping
 
 import (
+	"Scraper/DataTypes"
+	"Scraper/MongoDBInteractions"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -21,76 +23,7 @@ import (
 	"time"
 )
 
-// Structs to match the XML structure
-type UrlSet struct {
-	URLs []URL `xml:"url"`
-}
-
-type URL struct {
-	Loc     string `xml:"loc"`
-	LastMod string `xml:"lastmod"`
-}
-
-type Promo struct {
-	ID              int    `json:"id"`
-	CatalogMessage  string `json:"catalog_message"`
-	IsPriceHidden   bool   `json:"is_price_hidden"`
-	OutputSmartlist int    `json:"output_smartlist"`
-	PriceMessage    string `json:"price_message"`
-	StartDate       string `json:"start_date"`
-	EndDate         string `json:"end_date"`
-	IsPromoTime     bool   `json:"is_promo_time"`
-}
-
-type InventoryJSON struct {
-	IsCurrentlySellableOnIbs bool        `json:"IsCurrentlySellableOnIbs"`
-	IsTooFarAvailable        bool        `json:"IsTooFarAvailable"`
-	IsNextToTodayAvailable   bool        `json:"IsNextToTodayAvailable"`
-	HasPublicationDate       bool        `json:"HasPublicationDate"`
-	HasFuturePublicationDate bool        `json:"HasFuturePublicationDate"`
-	HasInventoryPromotions   bool        `json:"HasInventoryPromotions"`
-	HasInventoryDiscount     bool        `json:"HasInventoryDiscount"`
-	IsDiscountAvarageVisible bool        `json:"IsDiscountAvarageVisible"`
-	ShippingCharges          json.Number `json:"ShippingCharges"`
-	InventoryDiscount        float64     `json:"InventoryDiscount"`
-	Price                    json.Number `json:"Price"`
-	IsGift                   bool        `json:"IsGift"`
-	FidelityPoints           int         `json:"FidelityPoints"`
-	SaleStartDate            string      `json:"sale_start_date"`
-	PublicationDate          string      `json:"publication_date"`
-	Promo                    []Promo     `json:"promo"`
-	Status                   int         `json:"status"`
-	QuantityWarehouse        int         `json:"quantity_warehouse"`
-	SmartListID              []int       `json:"smart_list_id"`
-	IsAvailable              bool        `json:"IsAvailable"`
-	MaxSellableQuantity      int         `json:"MaxSellableQuantity"`
-}
-
-type AvailabilityJSON struct {
-	Text string `json:"Text"`
-}
-
-type BuyInfos struct {
-	ISBN         string
-	Price        json.Number `json:"Price"`
-	Availability string      `json:"Text"`
-	Title        string
-	URL          string
-}
-
-type DescriptionData struct {
-	ShortDescription string
-	LongDescription  string
-}
-
-type FeltrinelliScrapedBook struct {
-	BuyInfos        BuyInfos
-	DescriptionData DescriptionData
-	Category        string
-	Details         map[string]string
-}
-
-func downloadAndParseXML(url string) (*UrlSet, error) {
+func downloadAndParseXML(url string) (*DataTypes.UrlSet, error) {
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download: %v", err)
@@ -114,7 +47,7 @@ func downloadAndParseXML(url string) (*UrlSet, error) {
 	}
 
 	// Parse the XML
-	var urlSet UrlSet
+	var urlSet DataTypes.UrlSet
 	err = xml.Unmarshal(data, &urlSet)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse XML: %v", err)
@@ -135,7 +68,7 @@ func getEAN(s string) string {
 
 func scrapeAllXMLs() {
 	baseURL := "https://www.lafeltrinelli.it/sitemap_itbook_"
-	urlSets := make([]UrlSet, 0)
+	urlSets := make([]DataTypes.UrlSet, 0)
 
 	for i := 1; i <= 70; i++ {
 		// Construct the URL
@@ -175,7 +108,7 @@ func scrapeAllXMLs() {
 			models = append(models, model)
 
 			if len(models) >= 10000 {
-				bulkWriteFeltrinelliProducts(models)
+				MongoDBInteractions.BulkWriteFeltrinelliProducts(models)
 				models = make([]mongo.WriteModel, 0)
 				fmt.Println("Processed 10000 XML entries into the DB.")
 				fmt.Println("Working URLSet index", urlSetsIndex, "out of", len(urlSets))
@@ -186,10 +119,10 @@ func scrapeAllXMLs() {
 	// Execute remaining models in bulk
 	if len(models) > 0 {
 		fmt.Println("Processing last", len(models), " into the DB.")
-		bulkWriteFeltrinelliProducts(models)
+		MongoDBInteractions.BulkWriteFeltrinelliProducts(models)
 	}
 
-	removeAllUnseenProductsAndBooks(lastSeen)
+	MongoDBInteractions.RemoveAllUnseenProductsAndBooks(lastSeen)
 }
 
 func getNewProducts(urlsChan chan string) {
@@ -197,11 +130,11 @@ func getNewProducts(urlsChan chan string) {
 	filter := bson.M{"IsBook": bson.M{"$exists": false}}
 	todoContext := context.TODO()
 
-	documentsCount, _ := feltrinelliProductsCollection.CountDocuments(todoContext, filter)
+	documentsCount, _ := MongoDBInteractions.FeltrinelliProductsCollection.CountDocuments(todoContext, filter)
 	fmt.Println("Number of new products: ", documentsCount)
 
 	opts := options.Find().SetBatchSize(1000)
-	cursor, err := feltrinelliProductsCollection.Find(todoContext, filter, opts)
+	cursor, err := MongoDBInteractions.FeltrinelliProductsCollection.Find(todoContext, filter, opts)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -231,7 +164,7 @@ func getNewProducts(urlsChan chan string) {
 			log.Fatalf("Missing or invalid URL in document: %v\n", document)
 		}
 		if !strings.HasPrefix(ean, "978") && !strings.HasPrefix(ean, "979") {
-			setProductIsBook(url, false)
+			MongoDBInteractions.SetProductIsBook(url, false)
 			continue
 		}
 		urlsChan <- url
@@ -249,7 +182,7 @@ func getNewProducts(urlsChan chan string) {
 	close(urlsChan) // Close the channel when done
 }
 
-func unmarshalJSON[T any](data []byte, target *T) error {
+func UnmarshalJSON[T any](data []byte, target *T) error {
 	err := json.Unmarshal(data, target)
 	if err != nil {
 		return fmt.Errorf("error unmarshaling JSON into %T: %w", target, err)
@@ -257,7 +190,7 @@ func unmarshalJSON[T any](data []byte, target *T) error {
 	return nil
 }
 
-func getEANFromPath(path string) string {
+func GetEANFromPath(path string) string {
 	parts := strings.Split(path, "/")
 	return parts[len(parts)-1]
 }
@@ -281,7 +214,7 @@ func areURLsForSameBook(URL1 string, URL2 string) bool {
 	return false
 }
 
-func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliScrapedBook) {
+func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *DataTypes.FeltrinelliScrapedBook) {
 	fakeChrome := req.DefaultClient().ImpersonateChrome()
 	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")), colly.Async(true))
 	c.SetClient(&http.Client{
@@ -291,10 +224,10 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 			reqURL := req.URL.String()
 			originalReqURL := via[len(via)-1].URL.String()
 			if areURLsForSameBook(originalReqURL, reqURL) {
-				setNewURLAndIsBook(originalReqURL, reqURL, true)
+				MongoDBInteractions.SetNewURLAndIsBook(originalReqURL, reqURL, true)
 				return nil
 			}
-			setProductIsBook(originalReqURL, false)
+			MongoDBInteractions.SetProductIsBook(originalReqURL, false)
 			return fmt.Errorf("redirects are not allowed")
 		},
 	})
@@ -308,36 +241,36 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 	}
 	c.SetRequestTimeout(30 * time.Second)
 
-	semaphore := NewSemaphore(50)
-	booksMap := make(map[string]*FeltrinelliScrapedBook)
+	semaphore := DataTypes.NewSemaphore(50)
+	booksMap := make(map[string]*DataTypes.FeltrinelliScrapedBook)
 	booksMapLock := sync.Mutex{}
 
 	c.OnHTML("pdp-physical-buy-info", func(e *colly.HTMLElement) {
 		if e.Attr(":is-ebook") == "true" || e.Attr(":is-marketplace") == "true" {
-			setProductIsBook(e.Request.URL.String(), false)
+			MongoDBInteractions.SetProductIsBook(e.Request.URL.String(), false)
 			e.Request.Ctx.Put("Skip", true)
 			return
 		}
-		EAN := getEANFromPath(e.Request.URL.Path)
-		var inventoryJSON InventoryJSON
-		if unmarshalJSON([]byte(e.Attr(":inventory")), &inventoryJSON) != nil {
+		EAN := GetEANFromPath(e.Request.URL.Path)
+		var inventoryJSON DataTypes.InventoryJSON
+		if UnmarshalJSON([]byte(e.Attr(":inventory")), &inventoryJSON) != nil {
 			return
 		}
-		var availabilityJSON AvailabilityJSON
-		if unmarshalJSON([]byte(e.Attr(":availability")), &availabilityJSON) != nil {
+		var availabilityJSON DataTypes.AvailabilityJSON
+		if UnmarshalJSON([]byte(e.Attr(":availability")), &availabilityJSON) != nil {
 			return
 		}
 
 		title := e.Attr(":product-title")
 		title = title[1 : len(title)-1]
-		buyInfos := BuyInfos{Price: inventoryJSON.Price,
+		buyInfos := DataTypes.BuyInfos{Price: inventoryJSON.Price,
 			Title:        title,
 			Availability: availabilityJSON.Text,
 			URL:          e.Request.URL.String(),
 			ISBN:         EAN}
 		//ImageURL: "https://www.lafeltrinelli.it/images/" + EAN + "_0_536_0_75.jpg"
 		booksMapLock.Lock()
-		booksMap[EAN] = &FeltrinelliScrapedBook{}
+		booksMap[EAN] = &DataTypes.FeltrinelliScrapedBook{}
 		booksMap[EAN].BuyInfos = buyInfos
 		booksMapLock.Unlock()
 	})
@@ -350,12 +283,12 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 		e.ForEach("span", func(i int, element *colly.HTMLElement) {
 			breadcrumbTexts = append(breadcrumbTexts, element.Text)
 		})
-		EAN := getEANFromPath(e.Request.URL.Path)
+		EAN := GetEANFromPath(e.Request.URL.Path)
 		booksMapLock.Lock()
 		if _, ok := booksMap[EAN]; ok {
 			booksMap[EAN].Category = strings.Join(breadcrumbTexts[2:], " > ")
 		} else {
-			setProductProblematic(e.Request.URL.String(), true)
+			MongoDBInteractions.SetProductProblematic(e.Request.URL.String(), true)
 			e.Request.Ctx.Put("Skip", true)
 		}
 		booksMapLock.Unlock()
@@ -365,16 +298,16 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 		if e.Request.Ctx.GetAny("Skip") == true {
 			return
 		}
-		EAN := getEANFromPath(e.Request.URL.Path)
+		EAN := GetEANFromPath(e.Request.URL.Path)
 		var descriptionParagraphs []string
 		e.ForEach("p", func(i int, element *colly.HTMLElement) {
 			descriptionParagraphs = append(descriptionParagraphs, element.Text)
 		})
-		var descriptionData DescriptionData
+		var descriptionData DataTypes.DescriptionData
 		if descriptionParagraphs != nil && len(descriptionParagraphs) > 0 {
-			descriptionData = DescriptionData{ShortDescription: descriptionParagraphs[0], LongDescription: strings.Join(descriptionParagraphs[1:], "\n")}
+			descriptionData = DataTypes.DescriptionData{ShortDescription: descriptionParagraphs[0], LongDescription: strings.Join(descriptionParagraphs[1:], "\n")}
 		} else {
-			descriptionData = DescriptionData{ShortDescription: cleanDescription(e.Text)}
+			descriptionData = DataTypes.DescriptionData{ShortDescription: cleanDescription(e.Text)}
 		}
 		booksMapLock.Lock()
 		booksMap[EAN].DescriptionData = descriptionData
@@ -385,7 +318,7 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 		if e.Request.Ctx.GetAny("Skip") == true {
 			return
 		}
-		EAN := getEANFromPath(e.Request.URL.Path)
+		EAN := GetEANFromPath(e.Request.URL.Path)
 		details := map[string]string{}
 		e.ForEach("div.cc-em-content-body", func(i int, e2 *colly.HTMLElement) {
 			e2.ForEach("div.cc-item", func(i int, e3 *colly.HTMLElement) {
@@ -415,7 +348,7 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 		if response.Request.Ctx.GetAny("Skip") == true {
 			return
 		}
-		EAN := getEANFromPath(response.Request.URL.Path)
+		EAN := GetEANFromPath(response.Request.URL.Path)
 		booksMapLock.Lock()
 		if fullBook, ok := booksMap[EAN]; !ok {
 			log.Fatalf("Failed to retrieve EAN in booksMap: %s", EAN)
@@ -445,7 +378,7 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *FeltrinelliSc
 	close(fullBooksChan)
 }
 
-func fullScrapeFeltrinelli() {
+func FullScrapeFeltrinelli() {
 	startTime := time.Now()
 
 	scrapeAllXMLs()
@@ -454,7 +387,7 @@ func fullScrapeFeltrinelli() {
 	go getNewProducts(urlsChan)
 	//go testSendingProducts(urlsChan)
 
-	fullBooksChan := make(chan *FeltrinelliScrapedBook)
+	fullBooksChan := make(chan *DataTypes.FeltrinelliScrapedBook)
 
 	go getProductInfos(urlsChan, fullBooksChan)
 	handleFeltrinelliScrapedBooks(fullBooksChan)
@@ -467,13 +400,13 @@ func testSendingProducts(urlsChan chan<- string) {
 	close(urlsChan)
 }
 
-func handleFeltrinelliScrapedBooks(fullBooksChan <-chan *FeltrinelliScrapedBook) {
+func handleFeltrinelliScrapedBooks(fullBooksChan <-chan *DataTypes.FeltrinelliScrapedBook) {
 	startTime := time.Now()
 	lastTime := startTime
 	count := 0
 
 	for fullBook := range fullBooksChan {
-		insertFeltrinelliScrapedBook(fullBook)
+		MongoDBInteractions.InsertFeltrinelliScrapedBook(fullBook)
 		count++
 		if count%100 == 0 {
 			elapsed := time.Since(startTime).Seconds()

@@ -1,6 +1,9 @@
-package main
+package FeltrinelliScraping
 
 import (
+	"Scraper/DataTypes"
+	"Scraper/MondadoriScraping"
+	"Scraper/MongoDBInteractions"
 	"fmt"
 	"github.com/gocolly/colly/v2"
 	"github.com/imroc/req/v3"
@@ -10,16 +13,16 @@ import (
 	"time"
 )
 
-func feltrinelliRepricer() {
+func FeltrinelliRepricer() {
 	startTime := time.Now()
 
-	ebayDataWithFeltrinelliBooks := getAllBooksOnEbay()
+	ebayDataWithFeltrinelliBooks := MongoDBInteractions.GetAllBooksOnEbay()
 
-	bookPartialsChannel := make(chan BookPartial, 60)
+	bookPartialsChannel := make(chan DataTypes.BookPartial, 60)
 
 	go scrapeRepricerBooksFeltrinelli(ebayDataWithFeltrinelliBooks, bookPartialsChannel)
 
-	var booksToUpdate []BookToUpdate
+	var booksToUpdate []DataTypes.BookToUpdate
 	for bookPartial := range bookPartialsChannel {
 		ebayDataWithFeltrinelliBook := ebayDataWithFeltrinelliBooks[bookPartial.ISBN]
 		booksToUpdate = addBookToUpdateToSliceWithFeltrinelli(bookPartial, ebayDataWithFeltrinelliBook.FeltrinelliBook, booksToUpdate)
@@ -27,14 +30,14 @@ func feltrinelliRepricer() {
 
 	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
 
-	bulkInsertBooksToUpdate(booksToUpdate, true)
+	MongoDBInteractions.BulkInsertBooksToUpdate(booksToUpdate, true)
 	fmt.Println("Finished updating ", len(booksToUpdate), " books.")
 
-	startPythonRepricer(booksToUpdate, true)
+	MondadoriScraping.StartPythonRepricer(booksToUpdate, true)
 }
 
-func addBookToUpdateToSliceWithFeltrinelli(bookInfo BookPartial, feltrinelliBook FeltrinelliBook, booksToUpdate []BookToUpdate) []BookToUpdate {
-	bookToUpdate := BookToUpdate{bookInfo.ISBN, bookInfo.Price, false, bookInfo.Available, false}
+func addBookToUpdateToSliceWithFeltrinelli(bookInfo DataTypes.BookPartial, feltrinelliBook DataTypes.FeltrinelliBook, booksToUpdate []DataTypes.BookToUpdate) []DataTypes.BookToUpdate {
+	bookToUpdate := DataTypes.BookToUpdate{ISBN: bookInfo.ISBN, Price: bookInfo.Price, PriceChanged: false, Available: bookInfo.Available, AvailabilityChanged: false}
 	if feltrinelliBook.Availability != bookInfo.Available {
 		bookToUpdate.AvailabilityChanged = true
 		fmt.Println("Availability changed to ", bookInfo.Available, " for ", bookInfo.ISBN)
@@ -50,7 +53,7 @@ func addBookToUpdateToSliceWithFeltrinelli(bookInfo BookPartial, feltrinelliBook
 	return booksToUpdate
 }
 
-func scrapeRepricerBooksFeltrinelli(ebayDataWithFeltrinelliBooks map[string]EbayDataWithFeltrinelliBook, bookPartialChannel chan<- BookPartial) {
+func scrapeRepricerBooksFeltrinelli(ebayDataWithFeltrinelliBooks map[string]DataTypes.EbayDataWithFeltrinelliBook, bookPartialChannel chan<- DataTypes.BookPartial) {
 	fakeChrome := req.DefaultClient().ImpersonateChrome()
 	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")), colly.Async(true))
 	c.SetClient(&http.Client{
@@ -77,26 +80,26 @@ func scrapeRepricerBooksFeltrinelli(ebayDataWithFeltrinelliBooks map[string]Ebay
 	}
 	c.SetRequestTimeout(30 * time.Second)
 
-	semaphore := NewSemaphore(50)
-	booksMap := make(map[string]BookPartial)
+	semaphore := DataTypes.NewSemaphore(50)
+	booksMap := make(map[string]DataTypes.BookPartial)
 
 	c.OnHTML("pdp-physical-buy-info", func(e *colly.HTMLElement) {
 		if e.Attr(":is-ebook") == "true" || e.Attr(":is-marketplace") == "true" {
 			log.Fatalf("Book during repricing is ebook or from marketplace")
 			return
 		}
-		EAN := getEANFromPath(e.Request.URL.Path)
-		var inventoryJSON InventoryJSON
-		if unmarshalJSON([]byte(e.Attr(":inventory")), &inventoryJSON) != nil {
+		EAN := GetEANFromPath(e.Request.URL.Path)
+		var inventoryJSON DataTypes.InventoryJSON
+		if UnmarshalJSON([]byte(e.Attr(":inventory")), &inventoryJSON) != nil {
 			return
 		}
-		var availabilityJSON AvailabilityJSON
-		if unmarshalJSON([]byte(e.Attr(":availability")), &availabilityJSON) != nil {
+		var availabilityJSON DataTypes.AvailabilityJSON
+		if UnmarshalJSON([]byte(e.Attr(":availability")), &availabilityJSON) != nil {
 			return
 		}
 
-		price, _ := formatNumber(inventoryJSON.Price)
-		booksMap[EAN] = BookPartial{
+		price, _ := MongoDBInteractions.FormatNumber(inventoryJSON.Price)
+		booksMap[EAN] = DataTypes.BookPartial{
 			Price:     price,
 			Available: availabilityJSON.Text,
 		}
@@ -104,7 +107,7 @@ func scrapeRepricerBooksFeltrinelli(ebayDataWithFeltrinelliBooks map[string]Ebay
 
 	c.OnScraped(func(response *colly.Response) {
 		semaphore.Release()
-		EAN := getEANFromPath(response.Request.URL.Path)
+		EAN := GetEANFromPath(response.Request.URL.Path)
 		if fullBook, ok := booksMap[EAN]; !ok {
 			log.Fatalf("Failed to retrieve EAN in booksMap: %s", EAN)
 		} else {

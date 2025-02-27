@@ -1,0 +1,169 @@
+package DataTypes
+
+import (
+	"encoding/json"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
+
+type BookPartial struct {
+	ISBN      string
+	Price     string
+	Available string
+}
+
+type BookToUpdate struct {
+	ISBN                string
+	Price               string
+	PriceChanged        bool
+	Available           string
+	AvailabilityChanged bool
+}
+
+type BookFull struct {
+	ISBN      string
+	Published bool
+	Title     string
+	Available string
+	Price     string
+	URL       string
+	ImageURL  string
+	Author    string
+	Category  string
+	Variant   string
+	Editor    string
+	Language  string
+}
+
+// Structs to match the XML structure
+type UrlSet struct {
+	URLs []URL `xml:"url"`
+}
+
+type URL struct {
+	Loc     string `xml:"loc"`
+	LastMod string `xml:"lastmod"`
+}
+
+type Promo struct {
+	ID              int    `json:"id"`
+	CatalogMessage  string `json:"catalog_message"`
+	IsPriceHidden   bool   `json:"is_price_hidden"`
+	OutputSmartlist int    `json:"output_smartlist"`
+	PriceMessage    string `json:"price_message"`
+	StartDate       string `json:"start_date"`
+	EndDate         string `json:"end_date"`
+	IsPromoTime     bool   `json:"is_promo_time"`
+}
+
+type InventoryJSON struct {
+	IsCurrentlySellableOnIbs bool        `json:"IsCurrentlySellableOnIbs"`
+	IsTooFarAvailable        bool        `json:"IsTooFarAvailable"`
+	IsNextToTodayAvailable   bool        `json:"IsNextToTodayAvailable"`
+	HasPublicationDate       bool        `json:"HasPublicationDate"`
+	HasFuturePublicationDate bool        `json:"HasFuturePublicationDate"`
+	HasInventoryPromotions   bool        `json:"HasInventoryPromotions"`
+	HasInventoryDiscount     bool        `json:"HasInventoryDiscount"`
+	IsDiscountAvarageVisible bool        `json:"IsDiscountAvarageVisible"`
+	ShippingCharges          json.Number `json:"ShippingCharges"`
+	InventoryDiscount        float64     `json:"InventoryDiscount"`
+	Price                    json.Number `json:"Price"`
+	IsGift                   bool        `json:"IsGift"`
+	FidelityPoints           int         `json:"FidelityPoints"`
+	SaleStartDate            string      `json:"sale_start_date"`
+	PublicationDate          string      `json:"publication_date"`
+	Promo                    []Promo     `json:"promo"`
+	Status                   int         `json:"status"`
+	QuantityWarehouse        int         `json:"quantity_warehouse"`
+	SmartListID              []int       `json:"smart_list_id"`
+	IsAvailable              bool        `json:"IsAvailable"`
+	MaxSellableQuantity      int         `json:"MaxSellableQuantity"`
+}
+
+type AvailabilityJSON struct {
+	Text string `json:"Text"`
+}
+
+type BuyInfos struct {
+	ISBN         string
+	Price        json.Number `json:"Price"`
+	Availability string      `json:"Text"`
+	Title        string
+	URL          string
+}
+
+type DescriptionData struct {
+	ShortDescription string
+	LongDescription  string
+}
+
+type FeltrinelliScrapedBook struct {
+	BuyInfos        BuyInfos
+	DescriptionData DescriptionData
+	Category        string
+	Details         map[string]string
+}
+
+type MongoDBBookDocument struct {
+	ISBN      string             `bson:"ISBN"`
+	Published bool               `bson:"Published"`
+	Title     string             `bson:"Title"`
+	Available string             `bson:"Available"`
+	Price     string             `bson:"Price"`
+	URL       string             `bson:"URL"`
+	ImageURL  string             `bson:"ImageURL"`
+	Author    string             `bson:"Author"`
+	Category  string             `bson:"Category"`
+	Editor    string             `bson:"Editor"`
+	Variant   string             `bson:"Variant"`
+	Language  string             `bson:"Language"`
+	UpdatedAt primitive.DateTime `bson:"UpdatedAt"`
+}
+
+type EbayData struct {
+	ISBN           string `bson:"ISBN"`
+	PublishedPrice string `bson:"PublishedPrice"`
+	Published      bool   `bson:"Published"`
+	ListingId      string `bson:"ListingId"`
+	OfferId        string `bson:"OfferId"`
+	EbayImageURL   string `bson:"EbayImageURL"`
+	MarketIn       string `bson:"MarketIn"`
+}
+
+type Details struct {
+	AnnoEdizione    string `json:"anno_edizione"`
+	Autore          string `json:"autore"`
+	Collana         string `json:"collana"`
+	Curatore        string `json:"curatore"`
+	Editore         string `json:"editore"`
+	Edizione        string `json:"edizione"`
+	EtaDiLettura    string `json:"eta_di_lettura"`
+	Formato         string `json:"formato"`
+	Illustratore    string `json:"illustratore"`
+	InCommercioDal  string `json:"in_commercio_dal"`
+	Pagine          string `json:"pagine"`
+	Tipo            string `json:"tipo"`
+	TitoloOriginale string `json:"titolo_originale"`
+	Traduttore      string `json:"traduttore"`
+}
+
+type FeltrinelliBook struct {
+	ISBN             string  `json:"isbn"`
+	Availability     string  `json:"availability"`
+	Details          Details `json:"details"`
+	LongDescription  string  `json:"long_description"`
+	ShortDescription string  `json:"short_description"`
+	Price            string  `json:"price"`
+	Title            string  `json:"title"`
+	URL              string  `json:"url"`
+	Category         string  `json:"category"`
+}
+
+type EbayDataWithFeltrinelliBook struct {
+	EbayData        EbayData        `bson:"EbayData"`
+	FeltrinelliBook FeltrinelliBook `bson:"FeltrinelliBook"`
+}
+
+type MongoDBFeltrinelliProduct struct {
+	URL string `bson:"URL"`
+	EAN string `bson:"EAN"`
+}

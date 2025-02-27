@@ -1,6 +1,10 @@
 package main
 
 import (
+	"Scraper/AmazonScraping"
+	"Scraper/FeltrinelliScraping"
+	"Scraper/MondadoriScraping"
+	"Scraper/MongoDBInteractions"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,50 +13,21 @@ import (
 )
 import _ "net/http/pprof"
 
-type BookPartial struct {
-	ISBN      string
-	Price     string
-	Available string
-}
-
-type BookToUpdate struct {
-	ISBN                string
-	Price               string
-	PriceChanged        bool
-	Available           string
-	AvailabilityChanged bool
-}
-
-type BookFull struct {
-	ISBN      string
-	Published bool
-	Title     string
-	Available string
-	Price     string
-	URL       string
-	ImageURL  string
-	Author    string
-	Category  string
-	Variant   string
-	Editor    string
-	Language  string
-}
-
 func main() {
 	startTime := time.Now()
-	connectToMongo()
-	defer disconnectFromMongo()
+	MongoDBInteractions.ConnectToMongo()
+	defer MongoDBInteractions.DisconnectFromMongo()
 
 	if len(os.Args) > 1 && os.Args[1] == "--scrapeBestsellers" {
-		scrapeBestsellers()
+		AmazonScraping.ScrapeBestsellers()
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "--fullScrape" {
-		fullScrape()
+		MondadoriScraping.FullScrape()
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "--repricer" {
-		repricer()
+		MondadoriScraping.Repricer()
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "--fullScrapeFeltrinelli" {
@@ -60,7 +35,7 @@ func main() {
 			log.Println(http.ListenAndServe("0.0.0.0:8888", nil))
 			panic("what")
 		}()
-		fullScrapeFeltrinelli()
+		FeltrinelliScraping.FullScrapeFeltrinelli()
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "--feltrinelliRepricer" {
@@ -68,7 +43,7 @@ func main() {
 			log.Println(http.ListenAndServe("0.0.0.0:8888", nil))
 			panic("what")
 		}()
-		feltrinelliRepricer()
+		FeltrinelliScraping.FeltrinelliRepricer()
 	}
 
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")
