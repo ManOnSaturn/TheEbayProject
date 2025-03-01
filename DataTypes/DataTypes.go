@@ -33,8 +33,6 @@ type BookFull struct {
 	Editor    string
 	Language  string
 }
-
-// Structs to match the XML structure
 type UrlSet struct {
 	URLs []URL `xml:"url"`
 }
@@ -42,6 +40,24 @@ type UrlSet struct {
 type URL struct {
 	Loc     string `xml:"loc"`
 	LastMod string `xml:"lastmod"`
+}
+
+type MondadoriSitemapItemFile struct {
+	MondadoriSitemapItem []MondadoriSitemapItem `xml:"url"`
+}
+
+type MondadoriSitemapItem struct {
+	Loc string `xml:"loc"`
+}
+
+// Sitemap represents a single <sitemap> element in the XML.
+type Sitemap struct {
+	Loc string `xml:"loc"`
+}
+
+// SitemapIndex represents the root <sitemapindex> element in the XML.
+type SitemapIndex struct {
+	Sitemaps []Sitemap `xml:"sitemap"`
 }
 
 type Promo struct {
@@ -103,7 +119,7 @@ type FeltrinelliScrapedBook struct {
 	Details         map[string]string
 }
 
-type MongoDBBookDocument struct {
+type MondadoriBook struct {
 	ISBN      string             `bson:"ISBN"`
 	Published bool               `bson:"Published"`
 	Title     string             `bson:"Title"`
@@ -166,4 +182,9 @@ type EbayDataWithFeltrinelliBook struct {
 type MongoDBFeltrinelliProduct struct {
 	URL string `bson:"URL"`
 	EAN string `bson:"EAN"`
+}
+
+type MongoDBMondadoriProduct struct {
+	URL  string `bson:"URL"`
+	ISBN string `bson:"ISBN"`
 }

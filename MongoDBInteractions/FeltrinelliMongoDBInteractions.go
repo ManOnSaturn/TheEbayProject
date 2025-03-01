@@ -194,7 +194,7 @@ func SetNewURLAndIsBook(originalURL string, URL string, isBook bool) {
 	}
 }
 
-func RemoveAllUnseenProductsAndBooks(lastSeen time.Time) {
+func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
 	fmt.Println("Removing all unseen products")
 	startTime := time.Now()
 	filter := bson.M{

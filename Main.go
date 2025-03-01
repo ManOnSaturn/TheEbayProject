@@ -38,6 +38,14 @@ func main() {
 		FeltrinelliScraping.FullScrape()
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "--fullScrapeMondadori" {
+		go func() {
+			log.Println(http.ListenAndServe("0.0.0.0:8888", nil))
+			panic("what")
+		}()
+		MondadoriScraping.NewFullScrape()
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "--feltrinelliRepricer" {
 		go func() {
 			log.Println(http.ListenAndServe("0.0.0.0:8888", nil))

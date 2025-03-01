@@ -138,7 +138,7 @@ func scrapeAllXMLs() {
 		MongoDBInteractions.BulkWriteFeltrinelliProducts(models)
 	}
 
-	MongoDBInteractions.RemoveAllUnseenProductsAndBooks(lastSeen)
+	MongoDBInteractions.RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen)
 }
 
 func getNewProducts(urlsChan chan string) {

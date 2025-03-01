@@ -54,6 +54,10 @@ func FullScrape() {
 	fmt.Println("Finished updating books in DB.")
 }
 
+func NewFullScrape() {
+	scrapeXMLs()
+}
+
 func getBooksToAddAndUpdate(scrapedBooksSet map[DataTypes.BookFull]bool) ([]*DataTypes.BookFull, []*DataTypes.BookFull) {
 	dbBooks := make(map[string]DataTypes.BookFull, 750000)
 	MongoDBInteractions.GetAllDBBooks(dbBooks)

@@ -26,10 +26,11 @@ func DisconnectFromMongo() {
 
 var client *mongo.Client
 var FeltrinelliProductsCollection *mongo.Collection
+var mondadoriProductsCollection *mongo.Collection
 var feltrinelliBooksCollection *mongo.Collection
-var booksCollection *mongo.Collection
-var booksToUpdateCollection *mongo.Collection
+var mondadoriBooksCollection *mongo.Collection
 var feltrinelliBooksToUpdateCollection *mongo.Collection
+var mondadoriBooksToUpdateCollection *mongo.Collection
 var BestsellersAmazonCollection *mongo.Collection
 var ebayDataCollection *mongo.Collection
 
@@ -47,17 +48,22 @@ func ConnectToMongo() {
 		panic(err)
 	}
 
+	database := client.Database("Rimanga")
+	//database := client.Database("Mondadori")
 	// Send a ping to confirm a successful connection
-	if err = client.Database("admin").RunCommand(context.TODO(), bson.D{{"ping", 1}}).Err(); err != nil {
+
+	if err = database.RunCommand(context.TODO(), bson.D{{"ping", 1}}).Err(); err != nil {
 		panic(err)
 	}
-	FeltrinelliProductsCollection = client.Database("Mondadori").Collection("FeltrinelliProducts")
-	feltrinelliBooksCollection = client.Database("Mondadori").Collection("FeltrinelliBooks")
-	booksCollection = client.Database("Mondadori").Collection("Books")
-	booksToUpdateCollection = client.Database("Mondadori").Collection("BooksToUpdate")
-	feltrinelliBooksToUpdateCollection = client.Database("Mondadori").Collection("FeltrinelliBooksToUpdate")
-	BestsellersAmazonCollection = client.Database("Mondadori").Collection("BestsellersAmazon")
-	ebayDataCollection = client.Database("Mondadori").Collection("EbayData")
+
+	FeltrinelliProductsCollection = database.Collection("FeltrinelliProducts")
+	mondadoriProductsCollection = database.Collection("MondadoriProducts")
+	feltrinelliBooksCollection = database.Collection("FeltrinelliBooks")
+	mondadoriBooksCollection = database.Collection("Books")
+	mondadoriBooksToUpdateCollection = database.Collection("BooksToUpdate")
+	feltrinelliBooksToUpdateCollection = database.Collection("FeltrinelliBooksToUpdate")
+	BestsellersAmazonCollection = database.Collection("BestsellersAmazon")
+	ebayDataCollection = database.Collection("EbayData")
 
 	fmt.Println("Pinged mongodb deployment. Successfully connected to MongoDB!")
 }
@@ -70,7 +76,7 @@ func InsertBooks(books []*DataTypes.BookFull) {
 
 	var documents []interface{}
 	for _, book := range books {
-		document := DataTypes.MongoDBBookDocument{
+		document := DataTypes.MondadoriBook{
 			ISBN:      book.ISBN,
 			Published: false,
 			Title:     book.Title,
@@ -88,7 +94,7 @@ func InsertBooks(books []*DataTypes.BookFull) {
 		documents = append(documents, document)
 	}
 
-	_, err := booksCollection.InsertMany(context.TODO(), documents)
+	_, err := mondadoriBooksCollection.InsertMany(context.TODO(), documents)
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred while inserting book documents in MongoDB", err, documents)
 		if err != nil {
@@ -122,7 +128,7 @@ func BulkInsertBooksToUpdate(books []DataTypes.BookToUpdate, isFeltrinelli bool)
 	if isFeltrinelli {
 		collection = feltrinelliBooksToUpdateCollection
 	} else {
-		collection = booksToUpdateCollection
+		collection = mondadoriBooksToUpdateCollection
 	}
 	_, err := collection.BulkWrite(context.TODO(), operations)
 	if err != nil {
@@ -163,7 +169,7 @@ func BulkUpdateBooks(books []*DataTypes.BookFull) {
 	}
 
 	bulkOption := options.BulkWrite().SetOrdered(false)
-	_, err := booksCollection.BulkWrite(context.TODO(), models, bulkOption)
+	_, err := mondadoriBooksCollection.BulkWrite(context.TODO(), models, bulkOption)
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk update operation:", err)
 		panic(err)
@@ -173,7 +179,7 @@ func BulkUpdateBooks(books []*DataTypes.BookFull) {
 func GetAllDBBooks(dbBooks map[string]DataTypes.BookFull) {
 	startTime := time.Now()
 	// Find all documents
-	cur, err := booksCollection.Find(context.TODO(), bson.D{{"ISBN", bson.D{{"$exists", true}}}})
+	cur, err := mondadoriBooksCollection.Find(context.TODO(), bson.D{{"ISBN", bson.D{{"$exists", true}}}})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -186,7 +192,7 @@ func GetAllDBBooks(dbBooks map[string]DataTypes.BookFull) {
 	}(cur, context.TODO())
 
 	for cur.Next(context.TODO()) {
-		var result DataTypes.MongoDBBookDocument
+		var result DataTypes.MondadoriBook
 		err := cur.Decode(&result)
 		if err != nil {
 			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
@@ -208,7 +214,7 @@ func GetAllPublishedBooks() map[string]DataTypes.BookFull {
 
 	booksFromDB := make(map[string]DataTypes.BookFull, 5000)
 	// Find all documents
-	cur, err := booksCollection.Find(context.TODO(), bson.D{{"ListingId", bson.D{{"$exists", true}}}})
+	cur, err := mondadoriBooksCollection.Find(context.TODO(), bson.D{{"ListingId", bson.D{{"$exists", true}}}})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -221,7 +227,7 @@ func GetAllPublishedBooks() map[string]DataTypes.BookFull {
 	}(cur, context.TODO())
 
 	for cur.Next(context.TODO()) {
-		var result DataTypes.MongoDBBookDocument
+		var result DataTypes.MondadoriBook
 		err := cur.Decode(&result)
 		if err != nil {
 			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
