@@ -68,7 +68,7 @@ func ConnectToMongo() {
 	fmt.Println("Pinged mongodb deployment. Successfully connected to MongoDB!")
 }
 
-func InsertBooks(books []*DataTypes.BookFull) {
+func InsertBooks(books []*DataTypes.MondadoriBook) {
 	if len(books) == 0 {
 		return
 	}
@@ -76,7 +76,7 @@ func InsertBooks(books []*DataTypes.BookFull) {
 
 	var documents []interface{}
 	for _, book := range books {
-		document := DataTypes.MondadoriBook{
+		document := DataTypes.MondadoriBookDocument{
 			ISBN:      book.ISBN,
 			Published: false,
 			Title:     book.Title,
@@ -100,7 +100,6 @@ func InsertBooks(books []*DataTypes.BookFull) {
 		if err != nil {
 			panic(err)
 		}
-
 	}
 }
 
@@ -139,7 +138,7 @@ func BulkInsertBooksToUpdate(books []DataTypes.BookToUpdate, isFeltrinelli bool)
 	}
 }
 
-func BulkUpdateBooks(books []*DataTypes.BookFull) {
+func BulkUpdateBooks(books []*DataTypes.MondadoriBook) {
 	if len(books) == 0 {
 		return
 	}
@@ -176,7 +175,7 @@ func BulkUpdateBooks(books []*DataTypes.BookFull) {
 	}
 }
 
-func GetAllDBBooks(dbBooks map[string]DataTypes.BookFull) {
+func GetAllDBBooks(dbBooks map[string]DataTypes.MondadoriBook) {
 	startTime := time.Now()
 	// Find all documents
 	cur, err := mondadoriBooksCollection.Find(context.TODO(), bson.D{{"ISBN", bson.D{{"$exists", true}}}})
@@ -192,7 +191,7 @@ func GetAllDBBooks(dbBooks map[string]DataTypes.BookFull) {
 	}(cur, context.TODO())
 
 	for cur.Next(context.TODO()) {
-		var result DataTypes.MondadoriBook
+		var result DataTypes.MondadoriBookDocument
 		err := cur.Decode(&result)
 		if err != nil {
 			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
@@ -201,7 +200,7 @@ func GetAllDBBooks(dbBooks map[string]DataTypes.BookFull) {
 			}
 		}
 
-		dbBooks[result.ISBN] = DataTypes.BookFull{ISBN: result.ISBN, Published: result.Published, Title: result.Title,
+		dbBooks[result.ISBN] = DataTypes.MondadoriBook{ISBN: result.ISBN, Published: result.Published, Title: result.Title,
 			Available: result.Available, Price: result.Price, URL: result.URL, ImageURL: result.ImageURL,
 			Author: result.Author, Category: result.Category, Variant: result.Variant, Editor: result.Editor,
 			Language: result.Language}
@@ -209,10 +208,10 @@ func GetAllDBBooks(dbBooks map[string]DataTypes.BookFull) {
 	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
 }
 
-func GetAllPublishedBooks() map[string]DataTypes.BookFull {
+func GetAllPublishedBooks() map[string]DataTypes.MondadoriBook {
 	startTime := time.Now()
 
-	booksFromDB := make(map[string]DataTypes.BookFull, 5000)
+	booksFromDB := make(map[string]DataTypes.MondadoriBook, 5000)
 	// Find all documents
 	cur, err := mondadoriBooksCollection.Find(context.TODO(), bson.D{{"ListingId", bson.D{{"$exists", true}}}})
 	if err != nil {
@@ -227,7 +226,7 @@ func GetAllPublishedBooks() map[string]DataTypes.BookFull {
 	}(cur, context.TODO())
 
 	for cur.Next(context.TODO()) {
-		var result DataTypes.MondadoriBook
+		var result DataTypes.MondadoriBookDocument
 		err := cur.Decode(&result)
 		if err != nil {
 			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
@@ -236,7 +235,7 @@ func GetAllPublishedBooks() map[string]DataTypes.BookFull {
 			}
 		}
 
-		booksFromDB[result.ISBN] = DataTypes.BookFull{ISBN: result.ISBN, Published: result.Published, Title: result.Title,
+		booksFromDB[result.ISBN] = DataTypes.MondadoriBook{ISBN: result.ISBN, Published: result.Published, Title: result.Title,
 			Available: result.Available, Price: result.Price, URL: result.URL, ImageURL: result.ImageURL,
 			Author: result.Author, Category: result.Category, Variant: result.Variant, Editor: result.Editor,
 			Language: result.Language}

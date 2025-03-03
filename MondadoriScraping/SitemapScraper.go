@@ -40,7 +40,6 @@ func scrapeXMLs() {
 			update := bson.M{
 				"$set": bson.M{
 					"URL":      entry.Loc,
-					"ISBN":     getISBNFromURL(entry.Loc),
 					"LastSeen": lastSeen,
 				},
 			}
@@ -186,8 +185,4 @@ func getRequestWithHeader(url string) (error, *http.Response) {
 	}
 
 	return err, resp
-}
-
-func getISBNFromURL(url string) string {
-	return url[len(url)-13 : len(url)-1]
 }

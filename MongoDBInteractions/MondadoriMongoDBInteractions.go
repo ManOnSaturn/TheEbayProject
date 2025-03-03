@@ -47,7 +47,7 @@ func RemoveAllUnseenProductsAndBooksMondadori(lastSeen time.Time) {
 		model := mongo.NewDeleteOneModel()
 		model.SetFilter(bson.M{"URL": result.URL})
 		deleteModels = append(deleteModels, model)
-		var mondadoriBook DataTypes.MondadoriBook
+		var mondadoriBook DataTypes.MondadoriBookDocument
 		findOneError := mondadoriBooksCollection.FindOne(context.TODO(), bson.M{"URL": result.URL}).Decode(&mondadoriBook)
 		if findOneError == nil {
 			mondadoriBooksISBNs = append(mondadoriBooksISBNs, mondadoriBook.ISBN)
@@ -107,4 +107,88 @@ func BulkWriteMondadoriProducts(models []mongo.WriteModel) {
 	if err != nil {
 		log.Fatalf("Failed to execute bulk write: %v", err)
 	}
+}
+
+func UpsertMondadoriBook(book DataTypes.MondadoriBook) {
+	filter := bson.M{"ISBN": book.ISBN}
+	update := bson.M{
+		"$set": bson.M{
+			"ISBN":          book.ISBN,
+			"Title":         book.Title,
+			"Available":     book.Available,
+			"Price":         book.Price,
+			"ImageURL":      book.ImageURL,
+			"Author":        book.Author,
+			"Editor":        book.Editor,
+			"Variant":       book.Variant,
+			"Language":      book.Language,
+			"PublishedFrom": book.PublishedFrom,
+			"Pages":         book.Pages,
+			"Description":   book.Description,
+			"Series":        book.Series,
+			"Categories":    book.Categories},
+	}
+
+	model := mongo.NewUpdateOneModel().
+		SetFilter(filter).
+		SetUpdate(update).
+		SetUpsert(true)
+
+	models := []mongo.WriteModel{model}
+	_, err := mondadoriBooksCollection.BulkWrite(context.TODO(), models)
+	if err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred while upserting book document in MongoDB", err, update)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func UpsertMondadoriISBNInProducts(book DataTypes.MondadoriBook) {
+	filter := bson.M{"URL": book.URL}
+	update := bson.M{
+		"$set": bson.M{
+			"ISBN": book.ISBN,
+		},
+	}
+
+	model := mongo.NewUpdateOneModel().
+		SetFilter(filter).
+		SetUpdate(update).
+		SetUpsert(true)
+
+	models := []mongo.WriteModel{model}
+	_, err := mondadoriProductsCollection.BulkWrite(context.TODO(), models)
+	if err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred while upserting ISBN in MongoDB", err, update)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func GetAllMondadoriURLs(urlsChan chan<- string) {
+	cursor, err := mondadoriProductsCollection.Find(context.TODO(), bson.M{"ISBN": bson.M{"$exists": false}})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(cur *mongo.Cursor, ctx context.Context) {
+		err := cur.Close(ctx)
+		if err != nil {
+			_, err := fmt.Fprintln(os.Stderr, "Error occurred while closing cursor", err)
+			panic(err)
+		}
+	}(cursor, context.TODO())
+	for cursor.Next(context.TODO()) {
+		var result DataTypes.MongoDBMondadoriProduct
+		err := cursor.Decode(&result)
+		if err != nil {
+			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
+			if err != nil {
+				panic(err)
+			}
+		}
+		urlsChan <- result.URL
+	}
+	close(urlsChan)
 }

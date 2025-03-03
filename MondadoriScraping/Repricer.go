@@ -31,7 +31,7 @@ func Repricer() {
 	PythonInteractions.StartPythonRepricer(booksToUpdate, false)
 }
 
-func addBookToUpdateToSlice(bookInfo DataTypes.BookPartial, dbBook DataTypes.BookFull, booksToUpdate []DataTypes.BookToUpdate) []DataTypes.BookToUpdate {
+func addBookToUpdateToSlice(bookInfo DataTypes.BookPartial, dbBook DataTypes.MondadoriBook, booksToUpdate []DataTypes.BookToUpdate) []DataTypes.BookToUpdate {
 	bookToUpdate := DataTypes.BookToUpdate{bookInfo.ISBN, bookInfo.Price, false, bookInfo.Available, false}
 	if dbBook.Available != bookInfo.Available {
 		bookToUpdate.AvailabilityChanged = true

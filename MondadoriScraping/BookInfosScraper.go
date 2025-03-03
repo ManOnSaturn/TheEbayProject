@@ -19,7 +19,7 @@ type MondadoriPageInfo struct {
 	PageNumbers int
 }
 
-func getBooks(booksChannel chan<- DataTypes.BookFull) {
+func getBooks(booksChannel chan<- DataTypes.MondadoriBook) {
 	var err error
 	pageInfos := []MondadoriPageInfo{
 		{URL: "https://www.mondadoristore.it/libri/italiani/Ambiente-e-Animali/genG001/"},
@@ -112,7 +112,7 @@ func getBooks(booksChannel chan<- DataTypes.BookFull) {
 			bookVariant := element.ChildAttr("div.info-data-product", "data-variant")
 			bookEditor := element.ChildAttr("div.info-data-product", "data-brand")
 			bookImageURL := element.ChildAttr("img.image.first-img.product-img.is-book.maxHeightLarge", "src")
-			booksChannel <- DataTypes.BookFull{
+			booksChannel <- DataTypes.MondadoriBook{
 				ISBN:      bookISBN,
 				Title:     bookTitle,
 				Available: bookAvailableText,
@@ -213,7 +213,7 @@ func shuffle(slice []string) {
 	}
 }
 
-func scrapeRepricerBooks(dbPublishedBooks map[string]DataTypes.BookFull, booksChannel chan<- DataTypes.BookPartial) {
+func scrapeRepricerBooks(dbPublishedBooks map[string]DataTypes.MondadoriBook, booksChannel chan<- DataTypes.BookPartial) {
 	var err error
 	// Create colly collector, while impersonating chrome.
 	fakeChrome := req.DefaultClient().ImpersonateChrome()
