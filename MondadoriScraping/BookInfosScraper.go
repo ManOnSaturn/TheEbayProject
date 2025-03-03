@@ -6,11 +6,6 @@ import (
 	"time"
 )
 
-type MondadoriPageInfo struct {
-	URL         string
-	PageNumbers int
-}
-
 func logErroredPages(pageErroredChan chan struct{}) {
 	numPageErrored := 0
 	lastTimeError := time.Now()
