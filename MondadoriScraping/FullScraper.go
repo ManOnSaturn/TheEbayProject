@@ -4,9 +4,9 @@ import (
 	"Scraper/DataTypes"
 	"Scraper/MongoDBInteractions"
 	"Scraper/Proxy"
-	"fmt"
 	"github.com/gocolly/colly/v2"
 	"github.com/imroc/req/v3"
+	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 	"strconv"
 	"strings"
@@ -88,11 +88,22 @@ func NewFullScrape() {
 		wg.Wait()
 		close(booksChan)
 	}()
-
+	var models []mongo.WriteModel
+	var models2 []mongo.WriteModel
 	for book := range booksChan {
-		fmt.Println(book)
-		MongoDBInteractions.UpsertMondadoriBook(*book)
-		MongoDBInteractions.UpsertMondadoriISBNInProducts(*book)
+		models = append(models, MongoDBInteractions.CreateUpsertModelFromMondadoriBook(*book))
+		models2 = append(models2, MongoDBInteractions.CreateUpsertModelFromMondadoriBookForProducts(*book))
+		if len(models) == 1000 {
+			MongoDBInteractions.UpsertMondadoriBooks(models)
+			models = make([]mongo.WriteModel, 0)
+			MongoDBInteractions.UpsertMondadoriISBNInProducts(models2)
+			models2 = make([]mongo.WriteModel, 0)
+		}
+	}
+
+	if len(models) > 0 {
+		MongoDBInteractions.UpsertMondadoriBooks(models)
+		MongoDBInteractions.UpsertMondadoriISBNInProducts(models2)
 	}
 }
 

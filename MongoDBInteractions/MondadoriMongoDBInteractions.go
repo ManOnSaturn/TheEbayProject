@@ -109,7 +109,7 @@ func BulkWriteMondadoriProducts(models []mongo.WriteModel) {
 	}
 }
 
-func UpsertMondadoriBook(book DataTypes.MondadoriBook) {
+func CreateUpsertModelFromMondadoriBook(book DataTypes.MondadoriBook) *mongo.UpdateOneModel {
 	filter := bson.M{"ISBN": book.ISBN}
 	update := bson.M{
 		"$set": bson.M{
@@ -133,18 +133,30 @@ func UpsertMondadoriBook(book DataTypes.MondadoriBook) {
 		SetFilter(filter).
 		SetUpdate(update).
 		SetUpsert(true)
+	return model
+}
 
-	models := []mongo.WriteModel{model}
+func UpsertMondadoriBooks(models []mongo.WriteModel) {
 	_, err := mondadoriBooksCollection.BulkWrite(context.TODO(), models)
 	if err != nil {
-		_, err := fmt.Fprintln(os.Stderr, "Error occurred while upserting book document in MongoDB", err, update)
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred while upserting book documents in mondadoriBooksCollection", err)
 		if err != nil {
 			panic(err)
 		}
 	}
 }
 
-func UpsertMondadoriISBNInProducts(book DataTypes.MondadoriBook) {
+func UpsertMondadoriISBNInProducts(models []mongo.WriteModel) {
+	_, err := mondadoriProductsCollection.BulkWrite(context.TODO(), models)
+	if err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred while upserting ISBNs in mondadoriProductsCollection", err)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func CreateUpsertModelFromMondadoriBookForProducts(book DataTypes.MondadoriBook) *mongo.UpdateOneModel {
 	filter := bson.M{"URL": book.URL}
 	update := bson.M{
 		"$set": bson.M{
@@ -156,15 +168,7 @@ func UpsertMondadoriISBNInProducts(book DataTypes.MondadoriBook) {
 		SetFilter(filter).
 		SetUpdate(update).
 		SetUpsert(true)
-
-	models := []mongo.WriteModel{model}
-	_, err := mondadoriProductsCollection.BulkWrite(context.TODO(), models)
-	if err != nil {
-		_, err := fmt.Fprintln(os.Stderr, "Error occurred while upserting ISBN in MongoDB", err, update)
-		if err != nil {
-			panic(err)
-		}
-	}
+	return model
 }
 
 func GetAllMondadoriURLs(urlsChan chan<- string) {
