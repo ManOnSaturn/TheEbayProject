@@ -199,3 +199,15 @@ type MongoDBMondadoriProduct struct {
 	URL  string `bson:"URL"`
 	ISBN string `bson:"ISBN"`
 }
+
+type Results struct {
+	ProxyAddress string `json:"proxy_address"`
+	Port         int    `json:"port"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+}
+
+type ProxyListResponse struct {
+	Count   int       `json:"count"`
+	Results []Results `json:"results"`
+}
