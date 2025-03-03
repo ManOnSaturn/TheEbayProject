@@ -172,7 +172,7 @@ func CreateUpsertModelFromMondadoriBookForProducts(book DataTypes.MondadoriBook)
 }
 
 func GetAllMondadoriURLs(urlsChan chan<- string) {
-	cursor, err := mondadoriProductsCollection.Find(context.TODO(), bson.M{"ISBN": bson.M{"$exists": false}})
+	cursor, err := mondadoriProductsCollection.Find(context.TODO(), bson.M{})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -192,6 +192,65 @@ func GetAllMondadoriURLs(urlsChan chan<- string) {
 				panic(err)
 			}
 		}
+		urlsChan <- result.URL
+	}
+	close(urlsChan)
+}
+
+func GetAllMondadoriURLsOnEbay(urlsChan chan<- string) {
+	startTime := time.Now()
+
+	// Define the aggregation pipeline
+	pipeline := bson.A{
+		bson.D{
+			{Key: "$project", Value: bson.D{
+				{Key: "EbayData", Value: "$$ROOT"},
+			}},
+		},
+		bson.D{
+			{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: "MondadoriProducts"},
+				{Key: "localField", Value: "EbayData.ISBN"},
+				{Key: "foreignField", Value: "ISBN"},
+				{Key: "as", Value: "MondadoriProduct"},
+			}},
+		},
+		bson.D{
+			{Key: "$unwind", Value: bson.D{
+				{Key: "path", Value: "$MondadoriProduct"},
+			}},
+		},
+		bson.D{
+			{Key: "$project", Value: bson.D{
+				{Key: "MondadoriProduct.URL", Value: "1"},
+			}},
+		},
+		bson.D{
+			{Key: "$replaceRoot", Value: bson.D{
+				{Key: "newRoot", Value: "$MondadoriProduct"},
+			}},
+		},
+	}
+
+	// Execute the aggregation pipeline
+	cursor, err := ebayDataCollection.Aggregate(context.TODO(), pipeline)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		err := cursor.Close(ctx)
+		if err != nil {
+
+		}
+	}(cursor, context.TODO())
+
+	// Iterate through the results
+	var results []DataTypes.URLDocument
+	if err = cursor.All(context.TODO(), &results); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Finished getting all URLs in", time.Since(startTime).Seconds(), "seconds")
+	for _, result := range results {
 		urlsChan <- result.URL
 	}
 	close(urlsChan)

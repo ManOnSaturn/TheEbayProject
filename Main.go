@@ -22,11 +22,7 @@ func main() {
 		AmazonScraping.ScrapeBestsellers()
 	}
 
-	if len(os.Args) > 1 && os.Args[1] == "--fullScrape" {
-		MondadoriScraping.FullScrape()
-	}
-
-	if len(os.Args) > 1 && os.Args[1] == "--repricer" {
+	if len(os.Args) > 1 && os.Args[1] == "--mondadoriRepricer" {
 		MondadoriScraping.Repricer()
 	}
 
@@ -39,20 +35,14 @@ func main() {
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "--fullScrapeMondadori" {
-		go func() {
-			log.Println(http.ListenAndServe("0.0.0.0:8888", nil))
-			panic("what")
-		}()
-		MondadoriScraping.NewFullScrape()
+		MondadoriScraping.FullScrape()
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "--feltrinelliRepricer" {
-		go func() {
-			log.Println(http.ListenAndServe("0.0.0.0:8888", nil))
-			panic("what")
-		}()
 		FeltrinelliScraping.Repricer()
 	}
+
+	MongoDBInteractions.Reschema()
 
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")
 }

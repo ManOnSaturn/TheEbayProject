@@ -34,7 +34,7 @@ func GetAllFeltrinelliBooksOnEbay() map[string]DataTypes.EbayDataWithFeltrinelli
 		},
 		bson.D{
 			{Key: "$unwind", Value: bson.D{
-				{Key: "path", Value: "FeltrinelliBook"},
+				{Key: "path", Value: "$FeltrinelliBook"},
 			}},
 		},
 	}

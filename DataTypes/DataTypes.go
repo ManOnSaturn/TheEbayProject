@@ -20,44 +20,49 @@ type BookToUpdate struct {
 }
 
 type MondadoriBookDocument struct {
-	ISBN          string             `bson:"ISBN"`
-	Published     bool               `bson:"Published"` // TODO remove
-	Title         string             `bson:"Title"`
-	Available     string             `bson:"Available"`
-	Price         string             `bson:"Price"`
-	URL           string             `bson:"URL"` // TODO remove
-	ImageURL      string             `bson:"ImageURL"`
-	Author        string             `bson:"Author"`
-	Category      string             `bson:"Category"` // TODO remove
-	Editor        string             `bson:"Editor"`
-	Variant       string             `bson:"Variant"`
-	Language      string             `bson:"Language"`
-	UpdatedAt     primitive.DateTime `bson:"UpdatedAt"` // TODO remove
-	PublishedFrom string             `bson:"PublishedFrom"`
-	Pages         int                `bson:"Pages"`
-	Description   string             `bson:"Description"`
-	Series        string             `bson:"Series"`
-	Categories    []string           `bson:"Categories"`
+	ISBN           string             `bson:"ISBN"`
+	Published      bool               `bson:"Published"`      // TODO remove
+	PublishedPrice string             `bson:"PublishedPrice"` // TODO remove
+	Title          string             `bson:"Title"`
+	Available      string             `bson:"Available"`
+	Price          string             `bson:"Price"`
+	URL            string             `bson:"URL"` // TODO remove
+	ImageURL       string             `bson:"ImageURL"`
+	Author         string             `bson:"Author"`
+	Category       string             `bson:"Category"` // TODO remove
+	Editor         string             `bson:"Editor"`
+	Variant        string             `bson:"Variant"`
+	Language       string             `bson:"Language"`
+	UpdatedAt      primitive.DateTime `bson:"UpdatedAt"`    // TODO remove
+	ListingId      string             `bson:"ListingId"`    // TODO remove
+	OfferId        string             `bson:"OfferId"`      // TODO remove
+	EbayImageUrl   string             `bson:"EbayImageUrl"` // TODO remove
+	PublishedFrom  string             `bson:"PublishedFrom"`
+	Pages          int                `bson:"Pages"`
+	Description    string             `bson:"Description"`
+	Series         string             `bson:"Series"`
+	Categories     []string           `bson:"Categories"`
 }
 
 type MondadoriBook struct {
-	ISBN          string
-	Published     bool // TODO remove
-	Title         string
-	Available     string
-	Price         string
-	URL           string // TODO remove
-	ImageURL      string
-	Author        string
-	Category      string // TODO remove
-	Variant       string
-	Editor        string
-	Language      string
-	PublishedFrom string
-	Pages         int
-	Description   string
-	Series        string
-	Categories    []string
+	ISBN           string
+	Published      bool // TODO remove
+	Title          string
+	Available      string
+	Price          string
+	URL            string // TODO remove
+	ImageURL       string
+	Author         string
+	Category       string // TODO remove
+	PublishedPrice string // TODO remove
+	Variant        string
+	Editor         string
+	Language       string
+	PublishedFrom  string
+	Pages          int
+	Description    string
+	Series         string
+	Categories     []string
 }
 
 type UrlSet struct {
@@ -157,37 +162,41 @@ type EbayData struct {
 }
 
 type Details struct {
-	AnnoEdizione    string `json:"anno_edizione"`
-	Autore          string `json:"autore"`
-	Collana         string `json:"collana"`
-	Curatore        string `json:"curatore"`
-	Editore         string `json:"editore"`
-	Edizione        string `json:"edizione"`
-	EtaDiLettura    string `json:"eta_di_lettura"`
-	Formato         string `json:"formato"`
-	Illustratore    string `json:"illustratore"`
-	InCommercioDal  string `json:"in_commercio_dal"`
-	Pagine          string `json:"pagine"`
-	Tipo            string `json:"tipo"`
-	TitoloOriginale string `json:"titolo_originale"`
-	Traduttore      string `json:"traduttore"`
+	AnnoEdizione    string `bson:"Anno edizione"`
+	Autore          string `bson:"Autore"`
+	Collana         string `bson:"Collana"`
+	Curatore        string `bson:"Curatore"`
+	Editore         string `bson:"Editore"`
+	Edizione        string `bson:"Edizione"`
+	EtaDiLettura    string `bson:"Età di lettura"`
+	Formato         string `bson:"Formato"`
+	Illustratore    string `bson:"Illustratore"`
+	InCommercioDal  string `bson:"In commercio dal"`
+	Pagine          string `bson:"Pagine"`
+	Tipo            string `bson:"Tipo"`
+	TitoloOriginale string `bson:"Titolo originale"`
+	Traduttore      string `bson:"Traduttore"`
 }
 
 type FeltrinelliBook struct {
-	ISBN             string  `json:"isbn"`
-	Availability     string  `json:"availability"`
-	Details          Details `json:"details"`
-	LongDescription  string  `json:"long_description"`
-	ShortDescription string  `json:"short_description"`
-	Price            string  `json:"price"`
-	Title            string  `json:"title"`
-	URL              string  `json:"url"`
-	Category         string  `json:"category"`
+	ISBN             string  `bson:"ISBN"`
+	Availability     string  `bson:"Availability"`
+	Details          Details `bson:"Details"`
+	LongDescription  string  `bson:"LongDescription"`
+	ShortDescription string  `bson:"ShortDescription"`
+	Price            string  `bson:"Price"`
+	Title            string  `bson:"Title"`
+	URL              string  `bson:"URL"`
+	Category         string  `bson:"Category"`
 }
 
 type EbayDataWithFeltrinelliBook struct {
 	EbayData        EbayData        `bson:"EbayData"`
 	FeltrinelliBook FeltrinelliBook `bson:"FeltrinelliBook"`
+}
+
+type URLDocument struct {
+	URL string `bson:"URL"`
 }
 
 type MongoDBFeltrinelliProduct struct {

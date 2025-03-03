@@ -5,13 +5,10 @@ import (
 	"context"
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"log"
 	"os"
 	"runtime"
-	"time"
 )
 
 func DisconnectFromMongo() {
@@ -48,8 +45,8 @@ func ConnectToMongo() {
 		panic(err)
 	}
 
-	database := client.Database("Rimanga")
-	//database := client.Database("Mondadori")
+	//database := client.Database("Rimanga")
+	database := client.Database("Mondadori")
 	// Send a ping to confirm a successful connection
 
 	if err = database.RunCommand(context.TODO(), bson.D{{"ping", 1}}).Err(); err != nil {
@@ -66,41 +63,6 @@ func ConnectToMongo() {
 	ebayDataCollection = database.Collection("EbayData")
 
 	fmt.Println("Pinged mongodb deployment. Successfully connected to MongoDB!")
-}
-
-func InsertBooks(books []*DataTypes.MondadoriBook) {
-	if len(books) == 0 {
-		return
-	}
-	nowTime := time.Now()
-
-	var documents []interface{}
-	for _, book := range books {
-		document := DataTypes.MondadoriBookDocument{
-			ISBN:      book.ISBN,
-			Published: false,
-			Title:     book.Title,
-			Available: book.Available,
-			Price:     book.Price,
-			URL:       book.URL,
-			ImageURL:  book.ImageURL,
-			Author:    book.Author,
-			Category:  book.Category,
-			Editor:    book.Editor,
-			Variant:   book.Variant,
-			Language:  book.Language,
-			UpdatedAt: primitive.NewDateTimeFromTime(nowTime),
-		}
-		documents = append(documents, document)
-	}
-
-	_, err := mondadoriBooksCollection.InsertMany(context.TODO(), documents)
-	if err != nil {
-		_, err := fmt.Fprintln(os.Stderr, "Error occurred while inserting book documents in MongoDB", err, documents)
-		if err != nil {
-			panic(err)
-		}
-	}
 }
 
 func BulkInsertBooksToUpdate(books []DataTypes.BookToUpdate, isFeltrinelli bool) {
@@ -138,110 +100,35 @@ func BulkInsertBooksToUpdate(books []DataTypes.BookToUpdate, isFeltrinelli bool)
 	}
 }
 
-func BulkUpdateBooks(books []*DataTypes.MondadoriBook) {
-	if len(books) == 0 {
-		return
-	}
-
+func Reschema() {
+	cursor, _ := mondadoriBooksCollection.Find(context.TODO(), bson.M{"ListingId": bson.M{"$exists": true}})
 	var models []mongo.WriteModel
-	nowTime := time.Now()
-	for _, book := range books {
-		filter := bson.M{"ISBN": book.ISBN}
-		update := bson.M{
-			"$set": bson.M{
-				"ISBN":      book.ISBN,
-				"Title":     book.Title,
-				"Available": book.Available,
-				"Price":     book.Price,
-				"URL":       book.URL,
-				"ImageURL":  book.ImageURL,
-				"Author":    book.Author,
-				"Category":  book.Category,
-				"Editor":    book.Editor,
-				"Variant":   book.Variant,
-				"Language":  book.Language,
-				"UpdatedAt": primitive.NewDateTimeFromTime(nowTime),
-			},
+	for cursor.Next(context.TODO()) {
+		var result DataTypes.MondadoriBookDocument
+		err := cursor.Decode(&result)
+		if err != nil {
+			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
+			if err != nil {
+				panic(err)
+			}
 		}
-		model := mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update)
-		models = append(models, model)
+
+		filter := bson.M{"ISBN": result.ISBN}
+		document := DataTypes.EbayData{
+			ISBN:           result.ISBN,
+			PublishedPrice: result.PublishedPrice,
+			Published:      result.Published,
+			ListingId:      result.ListingId,
+			OfferId:        result.OfferId,
+			EbayImageURL:   result.EbayImageUrl,
+			MarketIn:       "Mondadori",
+		}
+		update := bson.M{"$set": document}
+		models = append(models, mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true))
 	}
 
-	bulkOption := options.BulkWrite().SetOrdered(false)
-	_, err := mondadoriBooksCollection.BulkWrite(context.TODO(), models, bulkOption)
+	_, err := ebayDataCollection.BulkWrite(context.TODO(), models)
 	if err != nil {
-		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk update operation:", err)
 		panic(err)
 	}
-}
-
-func GetAllDBBooks(dbBooks map[string]DataTypes.MondadoriBook) {
-	startTime := time.Now()
-	// Find all documents
-	cur, err := mondadoriBooksCollection.Find(context.TODO(), bson.D{{"ISBN", bson.D{{"$exists", true}}}})
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func(cur *mongo.Cursor, ctx context.Context) {
-		err := cur.Close(ctx)
-		if err != nil {
-			_, err := fmt.Fprintln(os.Stderr, "Error occurred while closing cursor", err)
-			panic(err)
-		}
-	}(cur, context.TODO())
-
-	for cur.Next(context.TODO()) {
-		var result DataTypes.MondadoriBookDocument
-		err := cur.Decode(&result)
-		if err != nil {
-			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		dbBooks[result.ISBN] = DataTypes.MondadoriBook{ISBN: result.ISBN, Published: result.Published, Title: result.Title,
-			Available: result.Available, Price: result.Price, URL: result.URL, ImageURL: result.ImageURL,
-			Author: result.Author, Category: result.Category, Variant: result.Variant, Editor: result.Editor,
-			Language: result.Language}
-	}
-	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
-}
-
-func GetAllPublishedBooks() map[string]DataTypes.MondadoriBook {
-	startTime := time.Now()
-
-	booksFromDB := make(map[string]DataTypes.MondadoriBook, 5000)
-	// Find all documents
-	cur, err := mondadoriBooksCollection.Find(context.TODO(), bson.D{{"ListingId", bson.D{{"$exists", true}}}})
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func(cur *mongo.Cursor, ctx context.Context) {
-		err := cur.Close(ctx)
-		if err != nil {
-			_, err := fmt.Fprintln(os.Stderr, "Error occurred while closing cursor", err)
-			panic(err)
-		}
-	}(cur, context.TODO())
-
-	for cur.Next(context.TODO()) {
-		var result DataTypes.MondadoriBookDocument
-		err := cur.Decode(&result)
-		if err != nil {
-			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		booksFromDB[result.ISBN] = DataTypes.MondadoriBook{ISBN: result.ISBN, Published: result.Published, Title: result.Title,
-			Available: result.Available, Price: result.Price, URL: result.URL, ImageURL: result.ImageURL,
-			Author: result.Author, Category: result.Category, Variant: result.Variant, Editor: result.Editor,
-			Language: result.Language}
-	}
-
-	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
-
-	return booksFromDB
 }

@@ -15,53 +15,7 @@ import (
 )
 
 func FullScrape() {
-	//startTime := time.Now()
-
-	//// Create a context with timeout
-	//ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
-	//defer cancel()
-	//scrapingFinishedChannel := make(chan bool)
-	//
-	//go func() {
-	//	select {
-	//	case <-scrapingFinishedChannel:
-	//		cancel()
-	//	case <-ctx.Done():
-	//		panic("Scraping timed out")
-	//	}
-	//}()
-
-	//booksChannel := make(chan DataTypes.MondadoriBook, 60)
-	//
-	//go getBooks(booksChannel)
-	//
-	//bookSet := make(map[DataTypes.MondadoriBook]bool, 750000)
-	//
-	//for bookInfo := range booksChannel {
-	//	bookSet[bookInfo] = true
-	//}
-	//
-	////scrapingFinishedChannel <- true
-	//fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
-	//
-	//booksToAdd, booksToUpdate := getBooksToAddAndUpdate(bookSet)
-	//
-	//var mongoDBOperationsWG sync.WaitGroup
-	//
-	//mongoDBOperationsWG.Add(1)
-	//go func() {
-	//	defer mongoDBOperationsWG.Done()
-	//	MongoDBInteractions.InsertBooks(booksToAdd)
-	//	fmt.Println("Finished inserting new books in DB.")
-	//}()
-	//
-	//mongoDBOperationsWG.Wait()
-	//MongoDBInteractions.BulkUpdateBooks(booksToUpdate)
-	//fmt.Println("Finished updating books in DB.")
-}
-
-func NewFullScrape() {
-	//scrapeXMLs()
+	scrapeXMLs()
 
 	urlsChan := make(chan string, 100)
 	booksChan := make(chan *DataTypes.MondadoriBook, 100)
@@ -78,11 +32,7 @@ func NewFullScrape() {
 		}(proxy)
 	}
 
-	urlsChan <- "https://www.mondadoristore.it/MillenniuM-Ediz-speciale-2024-Vol-86-Fatela-finita-L-Ucraina-Gaza-e-le-altre-foto-e-parole-na/eai979128198504/"
-	urlsChan <- "https://www.mondadoristore.it/Filologia-germanica-Lingue-Nicoletta-Francovich-Onesti/eai978884302315/"
-	urlsChan <- "https://www.mondadoristore.it/Modernist-bread-at-home-Ediz-italiana/eai979898871311/"
-	close(urlsChan)
-	//go MongoDBInteractions.GetAllMondadoriURLs(urlsChan)
+	go MongoDBInteractions.GetAllMondadoriURLs(urlsChan)
 
 	go func() {
 		wg.Wait()
@@ -202,27 +152,3 @@ func getChromeClient() *req.Client {
 	}
 	return chromeClient
 }
-
-//func getBooksToAddAndUpdate(scrapedBooksSet map[DataTypes.MondadoriBook]bool) ([]*DataTypes.MondadoriBook, []*DataTypes.MondadoriBook) {
-//	dbBooks := make(map[string]DataTypes.MondadoriBook, 750000)
-//	MongoDBInteractions.GetAllDBBooks(dbBooks)
-//	var booksToAdd []*DataTypes.MondadoriBook
-//	var booksToUpdate []*DataTypes.MondadoriBook
-//
-//	fmt.Println("Creating lists of books to create and books to update.")
-//	startTime := time.Now()
-//	for bookInfo := range scrapedBooksSet {
-//		bookFromDB, ok := dbBooks[bookInfo.ISBN]
-//		if !ok {
-//			// If the book ISBN from the scraped books set is not in the DB, then add the book to the DB
-//			booksToAdd = append(booksToAdd, &bookInfo)
-//		} else if !bookFromDB.Published && bookFromDB != bookInfo {
-//			// Else if the scraped book is in the DB, it's unpublished from us, and it has some differences, update it
-//			booksToUpdate = append(booksToUpdate, &bookInfo)
-//		}
-//	}
-//
-//	fmt.Println(len(booksToAdd), "books to add.", len(booksToUpdate), "books to update.")
-//	fmt.Println("Finished creating lists of books to add and update in DB in", time.Since(startTime).Seconds(), "seconds.")
-//	return booksToAdd, booksToUpdate
-//}

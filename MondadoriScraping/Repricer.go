@@ -3,47 +3,44 @@ package MondadoriScraping
 import (
 	"Scraper/DataTypes"
 	"Scraper/MongoDBInteractions"
-	"Scraper/PythonInteractions"
-	"fmt"
-	"time"
+	"Scraper/Proxy"
+	"go.mongodb.org/mongo-driver/mongo"
+	"sync"
 )
 
 func Repricer() {
-	startTime := time.Now()
+	urlsChan := make(chan string, 100)
+	booksChan := make(chan *DataTypes.MondadoriBook, 100)
+	proxies := Proxy.GetProxies()
 
-	dbPublishedBooks := MongoDBInteractions.GetAllPublishedBooks()
+	wg := sync.WaitGroup{}
+	wg.Add(len(proxies))
 
-	booksChannel := make(chan DataTypes.BookPartial, 60)
-
-	go scrapeRepricerBooks(dbPublishedBooks, booksChannel)
-
-	var booksToUpdate []DataTypes.BookToUpdate
-	for bookInfo := range booksChannel {
-		dbBook := dbPublishedBooks[bookInfo.ISBN]
-		booksToUpdate = addBookToUpdateToSlice(bookInfo, dbBook, booksToUpdate)
+	fakeChrome := getChromeClient()
+	for _, proxy := range proxies {
+		go func(proxy string) {
+			defer wg.Done()
+			scrapeBooks(urlsChan, booksChan, proxy, fakeChrome)
+		}(proxy)
 	}
 
-	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
+	go MongoDBInteractions.GetAllMondadoriURLsOnEbay(urlsChan)
 
-	MongoDBInteractions.BulkInsertBooksToUpdate(booksToUpdate, false)
-	fmt.Println("Finished updating ", len(booksToUpdate), " books.")
+	go func() {
+		wg.Wait()
+		close(booksChan)
+	}()
 
-	PythonInteractions.StartPythonRepricer(booksToUpdate, false)
-}
-
-func addBookToUpdateToSlice(bookInfo DataTypes.BookPartial, dbBook DataTypes.MondadoriBook, booksToUpdate []DataTypes.BookToUpdate) []DataTypes.BookToUpdate {
-	bookToUpdate := DataTypes.BookToUpdate{bookInfo.ISBN, bookInfo.Price, false, bookInfo.Available, false}
-	if dbBook.Available != bookInfo.Available {
-		bookToUpdate.AvailabilityChanged = true
-		fmt.Println("Availability changed to ", bookInfo.Available, " for ", bookInfo.ISBN)
-	}
-	if dbBook.Price != bookInfo.Price {
-		bookToUpdate.PriceChanged = true
-		fmt.Println("Price changed to ", bookInfo.Price, " for ", bookInfo.ISBN)
+	var models []mongo.WriteModel
+	for book := range booksChan {
+		models = append(models, MongoDBInteractions.CreateUpsertModelFromMondadoriBook(*book))
+		if len(models) == 1000 {
+			MongoDBInteractions.UpsertMondadoriBooks(models)
+			models = make([]mongo.WriteModel, 0)
+		}
 	}
 
-	if bookToUpdate.AvailabilityChanged || bookToUpdate.PriceChanged {
-		booksToUpdate = append(booksToUpdate, bookToUpdate)
+	if len(models) > 0 {
+		MongoDBInteractions.UpsertMondadoriBooks(models)
 	}
-	return booksToUpdate
 }
