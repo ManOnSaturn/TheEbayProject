@@ -48,7 +48,7 @@ func RemoveAllUnseenProductsAndBooksMondadori(lastSeen time.Time) {
 		model.SetFilter(bson.M{"URL": result.URL})
 		deleteModels = append(deleteModels, model)
 		var mondadoriBook DataTypes.MondadoriBookDocument
-		findOneError := mondadoriBooksCollection.FindOne(context.TODO(), bson.M{"URL": result.URL}).Decode(&mondadoriBook)
+		findOneError := MondadoriBooksCollection.FindOne(context.TODO(), bson.M{"URL": result.URL}).Decode(&mondadoriBook)
 		if findOneError == nil {
 			mondadoriBooksISBNs = append(mondadoriBooksISBNs, mondadoriBook.ISBN)
 		}
@@ -70,7 +70,7 @@ func RemoveAllUnseenProductsAndBooksMondadori(lastSeen time.Time) {
 	}
 
 	// Delete books with given URLs
-	_, err = mondadoriBooksCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
+	_, err = MondadoriBooksCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
 		panic(err)
@@ -137,7 +137,7 @@ func CreateUpsertModelFromMondadoriBook(book DataTypes.MondadoriBook) *mongo.Upd
 }
 
 func UpsertMondadoriBooks(models []mongo.WriteModel) {
-	_, err := mondadoriBooksCollection.BulkWrite(context.TODO(), models)
+	_, err := MondadoriBooksCollection.BulkWrite(context.TODO(), models)
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred while upserting book documents in mondadoriBooksCollection", err)
 		if err != nil {
@@ -254,4 +254,77 @@ func GetAllMondadoriURLsOnEbay(urlsChan chan<- string) {
 		urlsChan <- result.URL
 	}
 	close(urlsChan)
+}
+
+func GetMondadoriBook(isbn string) DataTypes.MondadoriBook {
+	filter := bson.M{"ISBN": isbn}
+	var result DataTypes.MondadoriBookDocument
+	_ = MondadoriBooksCollection.FindOne(context.TODO(), filter).Decode(&result)
+
+	return DataTypes.MondadoriBook{
+		ISBN:        result.ISBN,
+		Author:      result.Author,
+		Available:   result.Available,
+		Categories:  result.Categories,
+		Description: result.Description,
+		Editor:      result.Editor,
+		ImageURL:    result.ImageURL,
+		Language:    result.Language,
+		Pages:       result.Pages,
+		Price:       result.Price,
+		Series:      result.Series,
+		Title:       result.Title,
+		Variant:     result.Variant}
+}
+
+func GetAllMondadoriBooksOnEbay() map[string]DataTypes.EbayDataWithMondadoriBook {
+	startTime := time.Now()
+
+	// Define the aggregation pipeline
+	pipeline := bson.A{
+		bson.D{
+			{Key: "$project", Value: bson.D{
+				{Key: "EbayData", Value: "$$ROOT"},
+			}},
+		},
+		bson.D{
+			{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: "Books"},
+				{Key: "localField", Value: "EbayData.ISBN"},
+				{Key: "foreignField", Value: "ISBN"},
+				{Key: "as", Value: "MondadoriBook"},
+			}},
+		},
+		bson.D{
+			{Key: "$unwind", Value: bson.D{
+				{Key: "path", Value: "$MondadoriBook"},
+			}},
+		},
+	}
+
+	// Execute the aggregation pipeline
+	cursor, err := ebayDataCollection.Aggregate(context.TODO(), pipeline)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		err := cursor.Close(ctx)
+		if err != nil {
+
+		}
+	}(cursor, context.TODO())
+
+	// Iterate through the results
+	var results []DataTypes.EbayDataWithMondadoriBook
+	if err = cursor.All(context.TODO(), &results); err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
+
+	outputMap := make(map[string]DataTypes.EbayDataWithMondadoriBook, len(results))
+	for _, result := range results {
+		outputMap[result.MondadoriBook.ISBN] = DataTypes.EbayDataWithMondadoriBook{MondadoriBook: result.MondadoriBook, EbayData: result.EbayData}
+	}
+	return outputMap
 }

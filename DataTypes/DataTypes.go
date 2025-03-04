@@ -158,7 +158,6 @@ type EbayData struct {
 	ListingId      string `bson:"ListingId"`
 	OfferId        string `bson:"OfferId"`
 	EbayImageURL   string `bson:"EbayImageURL"`
-	MarketIn       string `bson:"MarketIn"`
 }
 
 type Details struct {
@@ -195,6 +194,11 @@ type EbayDataWithFeltrinelliBook struct {
 	FeltrinelliBook FeltrinelliBook `bson:"FeltrinelliBook"`
 }
 
+type EbayDataWithMondadoriBook struct {
+	EbayData      EbayData      `bson:"EbayData"`
+	MondadoriBook MondadoriBook `bson:"MondadoriBook"`
+}
+
 type URLDocument struct {
 	URL string `bson:"URL"`
 }
@@ -219,4 +223,45 @@ type Results struct {
 type ProxyListResponse struct {
 	Count   int       `json:"count"`
 	Results []Results `json:"results"`
+}
+
+type Category int
+
+const (
+	Saggistica         Category = 171243
+	Narrativa          Category = 171228
+	LibriDiTesto       Category = 171223
+	CucinaEGastronomia Category = 11104
+	BambiniERagazzi    Category = 171219
+	CorsiDiLingua      Category = 11442
+)
+
+type EbayBook struct {
+	ISBN          string   `bson:"ISBN"`
+	CategoryID    Category `bson:"CategoryID"`
+	Available     bool     `bson:"Available"`
+	Editor        string   `bson:"Editor"`
+	Author        string   `bson:"Author"`
+	Variant       string   `bson:"Variant"`
+	Language      string   `bson:"Language"`
+	Price         string   `bson:"Price"`
+	Title         string   `bson:"Title"`
+	PublishedFrom string   `bson:"PublishedFrom"`
+	Pages         int      `bson:"Pages"`
+	MarketIn      string   `bson:"MarketIn"`
+}
+
+func (b EbayBook) Equals(other EbayBook) bool {
+	return b.ISBN == other.ISBN &&
+		b.CategoryID == other.CategoryID &&
+		b.Available == other.Available &&
+		b.Editor == other.Editor &&
+		b.Author == other.Author &&
+		b.Variant == other.Variant &&
+		b.Language == other.Language &&
+		b.Price == other.Price &&
+		b.Title == other.Title &&
+		b.PublishedFrom == other.PublishedFrom &&
+		b.Pages == other.Pages &&
+		b.MarketIn == other.MarketIn
 }

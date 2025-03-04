@@ -55,6 +55,7 @@ func FullScrape() {
 		MongoDBInteractions.UpsertMondadoriBooks(models)
 		MongoDBInteractions.UpsertMondadoriISBNInProducts(models2)
 	}
+	//checkNoNewMondadoriCategory()
 }
 
 func scrapeBooks(urlsChan <-chan string, booksChan chan<- *DataTypes.MondadoriBook, proxy string, fakeChrome *req.Client) {

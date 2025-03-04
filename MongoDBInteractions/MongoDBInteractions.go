@@ -25,11 +25,12 @@ var client *mongo.Client
 var FeltrinelliProductsCollection *mongo.Collection
 var mondadoriProductsCollection *mongo.Collection
 var feltrinelliBooksCollection *mongo.Collection
-var mondadoriBooksCollection *mongo.Collection
+var MondadoriBooksCollection *mongo.Collection
 var feltrinelliBooksToUpdateCollection *mongo.Collection
 var mondadoriBooksToUpdateCollection *mongo.Collection
 var BestsellersAmazonCollection *mongo.Collection
 var ebayDataCollection *mongo.Collection
+var ebayBooksCollection *mongo.Collection
 
 func ConnectToMongo() {
 	var clientOptions *options.ClientOptions
@@ -56,12 +57,12 @@ func ConnectToMongo() {
 	FeltrinelliProductsCollection = database.Collection("FeltrinelliProducts")
 	mondadoriProductsCollection = database.Collection("MondadoriProducts")
 	feltrinelliBooksCollection = database.Collection("FeltrinelliBooks")
-	mondadoriBooksCollection = database.Collection("Books")
+	MondadoriBooksCollection = database.Collection("Books")
 	mondadoriBooksToUpdateCollection = database.Collection("BooksToUpdate")
 	feltrinelliBooksToUpdateCollection = database.Collection("FeltrinelliBooksToUpdate")
 	BestsellersAmazonCollection = database.Collection("BestsellersAmazon")
 	ebayDataCollection = database.Collection("EbayData")
-
+	ebayBooksCollection = database.Collection("EbayBooks")
 	fmt.Println("Pinged mongodb deployment. Successfully connected to MongoDB!")
 }
 
@@ -100,34 +101,41 @@ func BulkInsertBooksToUpdate(books []DataTypes.BookToUpdate, isFeltrinelli bool)
 	}
 }
 
-func Reschema() {
-	cursor, _ := mondadoriBooksCollection.Find(context.TODO(), bson.M{"ListingId": bson.M{"$exists": true}})
-	var models []mongo.WriteModel
-	for cursor.Next(context.TODO()) {
-		var result DataTypes.MondadoriBookDocument
-		err := cursor.Decode(&result)
-		if err != nil {
-			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		filter := bson.M{"ISBN": result.ISBN}
-		document := DataTypes.EbayData{
-			ISBN:           result.ISBN,
-			PublishedPrice: result.PublishedPrice,
-			Published:      result.Published,
-			ListingId:      result.ListingId,
-			OfferId:        result.OfferId,
-			EbayImageURL:   result.EbayImageUrl,
-			MarketIn:       "Mondadori",
-		}
-		update := bson.M{"$set": document}
-		models = append(models, mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true))
+func GetAllEbayBooks() []DataTypes.EbayBook {
+	cursor, _ := ebayBooksCollection.Find(context.TODO(), bson.M{})
+	var ebayBooks []DataTypes.EbayBook
+	err := cursor.All(context.TODO(), &ebayBooks)
+	if err != nil {
+		panic(err)
 	}
+	return ebayBooks
+}
 
-	_, err := ebayDataCollection.BulkWrite(context.TODO(), models)
+func AddBookToUpdate(isbn string) {
+	filter := bson.M{"ISBN": isbn}
+	update := bson.M{"ISBN": isbn}
+	updateOptions := options.Update().SetUpsert(true)
+	_, err := mondadoriBooksToUpdateCollection.UpdateOne(context.TODO(), filter, update, updateOptions)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func CreateUpsertModelForEbayBooks(ebayBook DataTypes.EbayBook) mongo.WriteModel {
+	filter := bson.M{"ISBN": ebayBook.ISBN}
+	update := bson.M{"$set": ebayBook}
+	return mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true)
+}
+
+func UpsertEbayBooks(models []mongo.WriteModel) {
+	_, err := ebayBooksCollection.BulkWrite(context.Background(), models)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func UpsertEbayData(models []mongo.WriteModel) {
+	_, err := ebayDataCollection.BulkWrite(context.Background(), models)
 	if err != nil {
 		panic(err)
 	}

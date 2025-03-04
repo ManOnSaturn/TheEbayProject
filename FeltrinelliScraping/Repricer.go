@@ -33,7 +33,7 @@ func Repricer() {
 	MongoDBInteractions.BulkInsertBooksToUpdate(booksToUpdate, true)
 	fmt.Println("Finished updating ", len(booksToUpdate), " books.")
 
-	PythonInteractions.StartPythonRepricer(booksToUpdate, true)
+	PythonInteractions.StartPythonRepricer(len(booksToUpdate), true)
 }
 
 func addBookToUpdateToSlice(bookInfo DataTypes.BookPartial, feltrinelliBook DataTypes.FeltrinelliBook, booksToUpdate []DataTypes.BookToUpdate) []DataTypes.BookToUpdate {
