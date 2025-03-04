@@ -4,10 +4,12 @@ import (
 	"Scraper/DataTypes"
 	"Scraper/MongoDBInteractions"
 	"Scraper/Proxy"
+	"fmt"
 	"github.com/gocolly/colly/v2"
 	"github.com/imroc/req/v3"
 	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,7 +20,7 @@ func FullScrape() {
 	scrapeXMLs()
 
 	urlsChan := make(chan string, 100)
-	booksChan := make(chan *DataTypes.MondadoriBook, 100)
+	booksChan := make(chan *DataTypes.MondadoriBook, 1000)
 	proxies := Proxy.GetProxies()
 
 	wg := sync.WaitGroup{}
@@ -29,6 +31,7 @@ func FullScrape() {
 		go func(proxy string) {
 			defer wg.Done()
 			scrapeBooks(urlsChan, booksChan, proxy, fakeChrome)
+			fmt.Println("Finished with proxy", proxy)
 		}(proxy)
 	}
 
@@ -55,6 +58,8 @@ func FullScrape() {
 		MongoDBInteractions.UpsertMondadoriBooks(models)
 		MongoDBInteractions.UpsertMondadoriISBNInProducts(models2)
 	}
+	// Start python repricer if during scrape XMLs some books have disappeared.
+	// Handle disappeared books during scrapeBooks as well.
 	//checkNoNewMondadoriCategory()
 }
 
@@ -135,10 +140,21 @@ func scrapeBooks(urlsChan <-chan string, booksChan chan<- *DataTypes.MondadoriBo
 		booksChan <- book
 	})
 
+	errorsNumber := 0
 	for url := range urlsChan {
 		err := c.Visit(url)
 		if err != nil {
-			panic(err)
+			errorsNumber++
+			_, err = fmt.Fprintf(os.Stderr, "Error during scrapeBooks with url %s: %v\n", url, err)
+			if err != nil {
+				panic(err)
+			}
+			if errorsNumber > 100 {
+				_, err = fmt.Fprintf(os.Stderr, "The same proxy(%s) failed 100 times.\n", proxy)
+				if err != nil {
+					panic(err)
+				}
+			}
 		}
 	}
 

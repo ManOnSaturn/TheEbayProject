@@ -29,8 +29,8 @@ func main() {
 		AmazonScraping.ScrapeBestsellers()
 	}
 
-	if len(os.Args) > 1 && os.Args[1] == "--mondadoriRepricer" {
-		MondadoriScraping.Repricer()
+	if len(os.Args) > 1 && os.Args[1] == "--repricer" {
+		reprice()
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "--fullScrapeFeltrinelli" {

@@ -63,7 +63,7 @@ func scrapeXMLs() {
 
 	// Execute remaining models in bulk
 	if len(models) > 0 {
-		fmt.Println("Processing last", len(models), " into the DB.")
+		fmt.Println("Processing last", len(models), "into the DB.")
 		MongoDBInteractions.BulkWriteMondadoriProducts(models)
 	}
 

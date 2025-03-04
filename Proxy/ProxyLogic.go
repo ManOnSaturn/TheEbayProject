@@ -9,7 +9,7 @@ import (
 
 func GetProxies() []string {
 	// Define the API URL
-	url := "https://proxy.webshare.io/api/v2/proxy/list/?mode=direct&page=1&page_size=100&valid=true&country_code__in=GB,DE,EG"
+	url := "https://proxy.webshare.io/api/v2/proxy/list/?mode=direct&page=1&page_size=100&valid=true&country_code__in=IT,GB,DE,EG"
 
 	// Create a new HTTP request
 	request, err := http.NewRequest("GET", url, nil)
