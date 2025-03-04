@@ -102,12 +102,11 @@ func Reschema() {
 
 		filter := bson.M{"ISBN": result.ISBN}
 		ebayData := DataTypes.EbayData{
-			ISBN:           result.ISBN,
-			PublishedPrice: result.PublishedPrice,
-			Published:      result.Published,
-			ListingId:      result.ListingId,
-			OfferId:        result.OfferId,
-			EbayImageURL:   result.EbayImageUrl}
+			ISBN:         result.ISBN,
+			Published:    result.Published,
+			ListingId:    result.ListingId,
+			OfferId:      result.OfferId,
+			EbayImageURL: result.EbayImageUrl}
 		update := bson.M{"$set": ebayData}
 		ebayDataModels = append(ebayDataModels, mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true))
 

@@ -152,12 +152,11 @@ type FeltrinelliScrapedBook struct {
 }
 
 type EbayData struct {
-	ISBN           string `bson:"ISBN"`
-	PublishedPrice string `bson:"PublishedPrice"`
-	Published      bool   `bson:"Published"`
-	ListingId      string `bson:"ListingId"`
-	OfferId        string `bson:"OfferId"`
-	EbayImageURL   string `bson:"EbayImageURL"`
+	ISBN         string `bson:"ISBN"`
+	Published    bool   `bson:"Published"`
+	ListingId    string `bson:"ListingId"`
+	OfferId      string `bson:"OfferId"`
+	EbayImageURL string `bson:"EbayImageURL"`
 }
 
 type Details struct {
