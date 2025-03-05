@@ -277,20 +277,7 @@ func GetMondadoriBook(isbn string) (*DataTypes.MondadoriBook, error) {
 		return nil, err
 	}
 
-	return &DataTypes.MondadoriBook{
-		ISBN:        result.ISBN,
-		Author:      result.Author,
-		Available:   result.Available,
-		Categories:  result.Categories,
-		Description: result.Description,
-		Editor:      result.Editor,
-		ImageURL:    result.ImageURL,
-		Language:    result.Language,
-		Pages:       result.Pages,
-		Price:       result.Price,
-		Series:      result.Series,
-		Title:       result.Title,
-		Variant:     result.Variant}, nil
+	return &result, nil
 }
 
 func GetAllMondadoriBooksOnEbay() map[string]DataTypes.EbayDataWithMondadoriBook {
