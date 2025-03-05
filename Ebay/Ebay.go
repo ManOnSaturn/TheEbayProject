@@ -58,8 +58,11 @@ func SearchMinCost(isbn string) float64 {
 				log.Printf("Error parsing price: %v", err)
 				continue
 			}
-
-			shippingOptions := item["shippingOptions"].([]interface{})
+			itemShippingOptions, okShippingOptions := item["shippingOptions"]
+			if !okShippingOptions {
+				continue
+			}
+			shippingOptions := itemShippingOptions.([]interface{})
 			if len(shippingOptions) == 0 {
 				continue
 			}

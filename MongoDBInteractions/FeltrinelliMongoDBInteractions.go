@@ -218,7 +218,7 @@ func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
 	deleteModels := make([]mongo.WriteModel, 0)
 	feltrinelliBooksISBNs := make([]string, 0)
 	for cursor.Next(context.TODO()) {
-		var result DataTypes.MongoDBFeltrinelliProduct
+		var result DataTypes.FeltrinelliProduct
 		err := cursor.Decode(&result)
 		if err != nil {
 			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)

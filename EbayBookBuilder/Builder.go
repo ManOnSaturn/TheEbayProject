@@ -184,18 +184,24 @@ func getFinalTitle(title string, author string, category string, language ...str
 func BuildEbayBooks(isbns []string) map[string]DataTypes.EbayBook {
 	ebayBooks := make(map[string]DataTypes.EbayBook)
 	for _, isbn := range isbns {
-		ebayBooks[isbn] = BuildEbayBook(isbn)
+		ebayBook := BuildEbayBook(isbn)
+		if ebayBook != nil {
+			ebayBooks[isbn] = *ebayBook
+		}
 	}
 	return ebayBooks
 }
 
-func BuildEbayBook(isbn string) DataTypes.EbayBook {
-	mondadoriBook := MongoDBInteractions.GetMondadoriBook(isbn)
+func BuildEbayBook(isbn string) *DataTypes.EbayBook {
+	mondadoriBook, err := MongoDBInteractions.GetMondadoriBook(isbn)
+	if err != nil {
+		return nil
+	}
 	categoryID := getCategoryIDMondadori(mondadoriBook.Categories[0])
 	available := mondadoriBook.Available == "Disponibilità immediata"
 	competitionPrice := Ebay.SearchMinCost(isbn)
 	price := getFinalPrice(mondadoriBook.Price, competitionPrice)
-	title := getFinalTitle(mondadoriBook.Title, mondadoriBook.Author, mondadoriBook.Category)
+	title := getFinalTitle(mondadoriBook.Title, mondadoriBook.Author, mondadoriBook.Categories[0])
 	ebayBook := DataTypes.EbayBook{ISBN: isbn,
 		CategoryID:    categoryID,
 		Available:     available,
@@ -209,5 +215,5 @@ func BuildEbayBook(isbn string) DataTypes.EbayBook {
 		Pages:         mondadoriBook.Pages,
 		MarketIn:      "Mondadori",
 	}
-	return ebayBook
+	return &ebayBook
 }

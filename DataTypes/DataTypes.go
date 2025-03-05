@@ -2,7 +2,6 @@ package DataTypes
 
 import (
 	"encoding/json"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type BookPartial struct {
@@ -19,50 +18,22 @@ type BookToUpdate struct {
 	AvailabilityChanged bool
 }
 
-type MondadoriBookDocument struct {
-	ISBN           string             `bson:"ISBN"`
-	Published      bool               `bson:"Published"`      // TODO remove
-	PublishedPrice string             `bson:"PublishedPrice"` // TODO remove
-	Title          string             `bson:"Title"`
-	Available      string             `bson:"Available"`
-	Price          string             `bson:"Price"`
-	URL            string             `bson:"URL"` // TODO remove
-	ImageURL       string             `bson:"ImageURL"`
-	Author         string             `bson:"Author"`
-	Category       string             `bson:"Category"` // TODO remove
-	Editor         string             `bson:"Editor"`
-	Variant        string             `bson:"Variant"`
-	Language       string             `bson:"Language"`
-	UpdatedAt      primitive.DateTime `bson:"UpdatedAt"`    // TODO remove
-	ListingId      string             `bson:"ListingId"`    // TODO remove
-	OfferId        string             `bson:"OfferId"`      // TODO remove
-	EbayImageUrl   string             `bson:"EbayImageUrl"` // TODO remove
-	PublishedFrom  string             `bson:"PublishedFrom"`
-	Pages          int                `bson:"Pages"`
-	Description    string             `bson:"Description"`
-	Series         string             `bson:"Series"`
-	Categories     []string           `bson:"Categories"`
-}
-
 type MondadoriBook struct {
-	ISBN           string
-	Published      bool // TODO remove
-	Title          string
-	Available      string
-	Price          string
-	URL            string // TODO remove
-	ImageURL       string
-	Author         string
-	Category       string // TODO remove
-	PublishedPrice string // TODO remove
-	Variant        string
-	Editor         string
-	Language       string
-	PublishedFrom  string
-	Pages          int
-	Description    string
-	Series         string
-	Categories     []string
+	ISBN          string   `bson:"ISBN"`
+	URL           string   `bson:"URL"`
+	Title         string   `bson:"Title"`
+	Available     string   `bson:"Available"`
+	Price         string   `bson:"Price"`
+	ImageURL      string   `bson:"ImageURL"`
+	Author        string   `bson:"Author"`
+	Editor        string   `bson:"Editor"`
+	Variant       string   `bson:"Variant"`
+	Language      string   `bson:"Language"`
+	PublishedFrom string   `bson:"PublishedFrom"`
+	Pages         int      `bson:"Pages"`
+	Description   string   `bson:"Description"`
+	Series        string   `bson:"Series"`
+	Categories    []string `bson:"Categories"`
 }
 
 type UrlSet struct {
@@ -202,12 +173,12 @@ type URLDocument struct {
 	URL string `bson:"URL"`
 }
 
-type MongoDBFeltrinelliProduct struct {
+type FeltrinelliProduct struct {
 	URL string `bson:"URL"`
 	EAN string `bson:"EAN"`
 }
 
-type MongoDBMondadoriProduct struct {
+type MondadoriProduct struct {
 	URL  string `bson:"URL"`
 	ISBN string `bson:"ISBN"`
 }

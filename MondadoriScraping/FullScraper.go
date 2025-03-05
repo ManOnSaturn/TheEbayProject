@@ -17,7 +17,7 @@ import (
 )
 
 func FullScrape() {
-	scrapeXMLs()
+	//scrapeXMLs()
 
 	urlsChan := make(chan string, 100)
 	booksChan := make(chan *DataTypes.MondadoriBook, 1000)
@@ -49,14 +49,14 @@ func FullScrape() {
 		if len(models) == 1000 {
 			MongoDBInteractions.UpsertMondadoriBooks(models)
 			models = make([]mongo.WriteModel, 0)
-			MongoDBInteractions.UpsertMondadoriISBNInProducts(models2)
+			MongoDBInteractions.UpsertMondadoriProducts(models2)
 			models2 = make([]mongo.WriteModel, 0)
 		}
 	}
 
 	if len(models) > 0 {
 		MongoDBInteractions.UpsertMondadoriBooks(models)
-		MongoDBInteractions.UpsertMondadoriISBNInProducts(models2)
+		MongoDBInteractions.UpsertMondadoriProducts(models2)
 	}
 	// Start python repricer if during scrape XMLs some books have disappeared.
 	// Handle disappeared books during scrapeBooks as well.

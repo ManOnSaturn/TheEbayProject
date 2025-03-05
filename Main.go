@@ -2,15 +2,12 @@ package main
 
 import (
 	"Scraper/AmazonScraping"
-	"Scraper/DataTypes"
 	"Scraper/EbayBookBuilder"
 	"Scraper/FeltrinelliScraping"
 	"Scraper/MondadoriScraping"
 	"Scraper/MongoDBInteractions"
 	"Scraper/PythonInteractions"
-	"context"
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"net/http"
@@ -49,7 +46,6 @@ func main() {
 		FeltrinelliScraping.Repricer()
 	}
 
-	//MongoDBInteractions.Reschema()
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")
 }
 
@@ -84,38 +80,4 @@ func reprice() {
 	}
 	MongoDBInteractions.UpsertEbayBooks(updateModels)
 	PythonInteractions.StartPythonRepricer(len(updateModels), false)
-}
-
-func Reschema() {
-	cursor, _ := MongoDBInteractions.MondadoriBooksCollection.Find(context.TODO(), bson.M{"ListingId": bson.M{"$exists": true}})
-	var ebayDataModels []mongo.WriteModel
-	var ebayBooksModels []mongo.WriteModel
-	for cursor.Next(context.TODO()) {
-		var result DataTypes.MondadoriBookDocument
-		err := cursor.Decode(&result)
-		if err != nil {
-			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		filter := bson.M{"ISBN": result.ISBN}
-		ebayData := DataTypes.EbayData{
-			ISBN:         result.ISBN,
-			Published:    result.Published,
-			ListingId:    result.ListingId,
-			OfferId:      result.OfferId,
-			EbayImageURL: result.EbayImageUrl}
-		update := bson.M{"$set": ebayData}
-		ebayDataModels = append(ebayDataModels, mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true))
-
-		ebayBook := EbayBookBuilder.BuildEbayBook(result.ISBN)
-		update = bson.M{"$set": ebayBook}
-		ebayBooksModels = append(ebayBooksModels, mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true))
-	}
-
-	MongoDBInteractions.UpsertEbayData(ebayDataModels)
-
-	MongoDBInteractions.UpsertEbayBooks(ebayBooksModels)
 }

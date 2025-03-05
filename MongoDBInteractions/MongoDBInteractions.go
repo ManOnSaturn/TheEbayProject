@@ -23,7 +23,7 @@ func DisconnectFromMongo() {
 
 var client *mongo.Client
 var FeltrinelliProductsCollection *mongo.Collection
-var mondadoriProductsCollection *mongo.Collection
+var MondadoriProductsCollection *mongo.Collection
 var feltrinelliBooksCollection *mongo.Collection
 var MondadoriBooksCollection *mongo.Collection
 var feltrinelliBooksToUpdateCollection *mongo.Collection
@@ -55,9 +55,9 @@ func ConnectToMongo() {
 	}
 
 	FeltrinelliProductsCollection = database.Collection("FeltrinelliProducts")
-	mondadoriProductsCollection = database.Collection("MondadoriProducts")
+	MondadoriProductsCollection = database.Collection("MondadoriProducts")
 	feltrinelliBooksCollection = database.Collection("FeltrinelliBooks")
-	MondadoriBooksCollection = database.Collection("Books")
+	MondadoriBooksCollection = database.Collection("MondadoriBooks")
 	mondadoriBooksToUpdateCollection = database.Collection("BooksToUpdate")
 	feltrinelliBooksToUpdateCollection = database.Collection("FeltrinelliBooksToUpdate")
 	BestsellersAmazonCollection = database.Collection("BestsellersAmazon")
@@ -113,7 +113,7 @@ func GetAllEbayBooks() []DataTypes.EbayBook {
 
 func AddBookToUpdate(isbn string) {
 	filter := bson.M{"ISBN": isbn}
-	update := bson.M{"ISBN": isbn}
+	update := bson.M{"$set": bson.M{"ISBN": isbn}}
 	updateOptions := options.Update().SetUpsert(true)
 	_, err := mondadoriBooksToUpdateCollection.UpdateOne(context.TODO(), filter, update, updateOptions)
 	if err != nil {
@@ -128,6 +128,9 @@ func CreateUpsertModelForEbayBooks(ebayBook DataTypes.EbayBook) mongo.WriteModel
 }
 
 func UpsertEbayBooks(models []mongo.WriteModel) {
+	if len(models) == 0 {
+		return
+	}
 	_, err := ebayBooksCollection.BulkWrite(context.Background(), models)
 	if err != nil {
 		panic(err)
@@ -135,6 +138,9 @@ func UpsertEbayBooks(models []mongo.WriteModel) {
 }
 
 func UpsertEbayData(models []mongo.WriteModel) {
+	if len(models) == 0 {
+		return
+	}
 	_, err := ebayDataCollection.BulkWrite(context.Background(), models)
 	if err != nil {
 		panic(err)
