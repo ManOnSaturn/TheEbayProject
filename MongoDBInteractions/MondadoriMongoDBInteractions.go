@@ -235,7 +235,7 @@ func GetAllMondadoriURLsOnEbay(urlsChan chan<- string) {
 		},
 		bson.D{
 			{Key: "$project", Value: bson.D{
-				{Key: "MondadoriProduct.URL", Value: "1"},
+				{Key: "MondadoriProduct.URL", Value: 1},
 			}},
 		},
 		bson.D{
