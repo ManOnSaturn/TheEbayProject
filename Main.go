@@ -8,6 +8,7 @@ import (
 	"Scraper/MongoDBInteractions"
 	"Scraper/PythonInteractions"
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"net/http"
@@ -46,7 +47,23 @@ func main() {
 		FeltrinelliScraping.Repricer()
 	}
 
+	//addstuf()
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")
+}
+
+func addstuf() {
+	ebayDataWithMondadoriBooks := MongoDBInteractions.GetAllBooksOnEbay()
+	var models []mongo.WriteModel
+
+	for isbn, ebayDataWithMondadoriBook := range ebayDataWithMondadoriBooks {
+		filter := bson.M{"ISBN": isbn}
+		categoryID := EbayBookBuilder.GetCategoryIDMondadori(ebayDataWithMondadoriBook.MondadoriBook.Categories[0])
+		update := bson.M{"$set": bson.M{"CategoryID": categoryID, "Description": ebayDataWithMondadoriBook.MondadoriBook.Description}}
+		updateModel := mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true)
+		models = append(models, updateModel)
+	}
+
+	MongoDBInteractions.UpsertEbayBooks(models)
 }
 
 func reprice() {
@@ -63,21 +80,28 @@ func reprice() {
 	}()
 	wg.Wait()
 
-	mondadoriBooks := MongoDBInteractions.GetAllMondadoriBooksOnEbay()
+	ebayDatas := MongoDBInteractions.GetAllBooksOnEbay()
 	isbns := make([]string, 0)
-	for _, mondadoriBook := range mondadoriBooks {
-		isbns = append(isbns, mondadoriBook.MondadoriBook.ISBN)
+	for _, ebayData := range ebayDatas {
+		isbns = append(isbns, ebayData.EbayData.ISBN)
 	}
-	ebayBooks := EbayBookBuilder.BuildEbayBooks(isbns)
+
+	newEbayBooks := EbayBookBuilder.BuildEbayBooks(isbns)
 	oldEbayBooks := MongoDBInteractions.GetAllEbayBooks()
+
 	var updateModels []mongo.WriteModel
 	for _, oldEbayBook := range oldEbayBooks {
-		newEbayBook := ebayBooks[oldEbayBook.ISBN]
-		if !newEbayBook.Equals(oldEbayBook) {
+		if newEbayBook, ok := newEbayBooks[oldEbayBook.ISBN]; !ok {
+			// For some reason, we didn't get the book created. We don't know what happened, therefore we delete the
+			// entry from ebay completely.
+			MongoDBInteractions.AddBookToUpdate(oldEbayBook.ISBN)
+			MongoDBInteractions.DeleteEbayBook(oldEbayBook.ISBN)
+		} else if !newEbayBook.Equals(oldEbayBook) {
 			MongoDBInteractions.AddBookToUpdate(oldEbayBook.ISBN)
 			updateModels = append(updateModels, MongoDBInteractions.CreateUpsertModelForEbayBooks(newEbayBook))
 		}
 	}
+
 	MongoDBInteractions.UpsertEbayBooks(updateModels)
 	PythonInteractions.StartPythonRepricer(len(updateModels), false)
 }

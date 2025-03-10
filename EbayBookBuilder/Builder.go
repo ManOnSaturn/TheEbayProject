@@ -72,9 +72,9 @@ func getCategorySwitch(categoryName string) DataTypes.Category {
 }
 
 // Function to get the category ID based on the input string
-func getCategoryIDMondadori(category string) DataTypes.Category {
+func GetCategoryIDMondadori(category string) DataTypes.Category {
 	// Split the input string and get the last part
-	splitCategories := strings.Split(category, "/")
+	splitCategories := strings.Split(category, ">")
 	category = splitCategories[len(splitCategories)-1]
 
 	return getCategorySwitch(category)
@@ -197,7 +197,7 @@ func BuildEbayBook(isbn string) *DataTypes.EbayBook {
 	if err != nil {
 		return nil
 	}
-	categoryID := getCategoryIDMondadori(mondadoriBook.Categories[0])
+	categoryID := GetCategoryIDMondadori(mondadoriBook.Categories[0])
 	available := mondadoriBook.Available == "Disponibilità immediata"
 	competitionPrice := Ebay.SearchMinCost(isbn)
 	price := getFinalPrice(mondadoriBook.Price, competitionPrice)
@@ -214,6 +214,7 @@ func BuildEbayBook(isbn string) *DataTypes.EbayBook {
 		PublishedFrom: mondadoriBook.PublishedFrom,
 		Pages:         mondadoriBook.Pages,
 		MarketIn:      "Mondadori",
+		Description:   mondadoriBook.Description,
 	}
 	return &ebayBook
 }

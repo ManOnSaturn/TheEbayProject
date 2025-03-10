@@ -137,6 +137,14 @@ func UpsertEbayBooks(models []mongo.WriteModel) {
 	}
 }
 
+func DeleteEbayBook(isbn string) {
+	filter := bson.M{"ISBN": isbn}
+	_, err := ebayBooksCollection.DeleteOne(context.Background(), filter)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func UpsertEbayData(models []mongo.WriteModel) {
 	if len(models) == 0 {
 		return
