@@ -164,10 +164,9 @@ type EbayDataWithFeltrinelliBook struct {
 	FeltrinelliBook FeltrinelliBook `bson:"FeltrinelliBook"`
 }
 
-type EbayDataWithFeltrinelliAndMondadoriBook struct {
-	EbayData        EbayData        `bson:"EbayData"`
-	MondadoriBook   MondadoriBook   `bson:"MondadoriBook"`
-	FeltrinelliBook FeltrinelliBook `bson:"FeltrinelliBook"`
+type EbayDataWithMondadoriBook struct {
+	EbayData      EbayData      `bson:"EbayData"`
+	MondadoriBook MondadoriBook `bson:"MondadoriBook"`
 }
 
 type URLDocument struct {
@@ -221,6 +220,7 @@ type EbayBook struct {
 	Pages         int      `bson:"Pages"`
 	MarketIn      string   `bson:"MarketIn"`
 	Description   string   `bson:"Description"`
+	ImageURL      string   `bson:"ImageURL"`
 }
 
 func (b EbayBook) Equals(other EbayBook) bool {
@@ -236,5 +236,6 @@ func (b EbayBook) Equals(other EbayBook) bool {
 		b.PublishedFrom == other.PublishedFrom &&
 		b.Pages == other.Pages &&
 		b.MarketIn == other.MarketIn &&
-		b.Description == other.Description
+		b.Description == other.Description &&
+		b.ImageURL == other.ImageURL
 }

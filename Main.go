@@ -52,13 +52,13 @@ func main() {
 }
 
 func addstuf() {
-	ebayDataWithMondadoriBooks := MongoDBInteractions.GetAllBooksOnEbay()
+	ebayDataWithMondadoriBooks := MongoDBInteractions.GetAllMondadoriBooksOnEbay()
 	var models []mongo.WriteModel
 
 	for isbn, ebayDataWithMondadoriBook := range ebayDataWithMondadoriBooks {
 		filter := bson.M{"ISBN": isbn}
 		categoryID := EbayBookBuilder.GetCategoryIDMondadori(ebayDataWithMondadoriBook.MondadoriBook.Categories[0])
-		update := bson.M{"$set": bson.M{"CategoryID": categoryID, "Description": ebayDataWithMondadoriBook.MondadoriBook.Description}}
+		update := bson.M{"$set": bson.M{"CategoryID": categoryID, "ImageURL": ebayDataWithMondadoriBook.MondadoriBook.ImageURL}}
 		updateModel := mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true)
 		models = append(models, updateModel)
 	}
@@ -80,7 +80,7 @@ func reprice() {
 	}()
 	wg.Wait()
 
-	ebayDatas := MongoDBInteractions.GetAllBooksOnEbay()
+	ebayDatas := MongoDBInteractions.GetAllMondadoriBooksOnEbay()
 	isbns := make([]string, 0)
 	for _, ebayData := range ebayDatas {
 		isbns = append(isbns, ebayData.EbayData.ISBN)

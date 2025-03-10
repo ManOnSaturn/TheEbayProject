@@ -215,6 +215,7 @@ func BuildEbayBook(isbn string) *DataTypes.EbayBook {
 		Pages:         mondadoriBook.Pages,
 		MarketIn:      "Mondadori",
 		Description:   mondadoriBook.Description,
+		ImageURL:      mondadoriBook.ImageURL,
 	}
 	return &ebayBook
 }

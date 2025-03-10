@@ -280,7 +280,7 @@ func GetMondadoriBook(isbn string) (*DataTypes.MondadoriBook, error) {
 	return &result, nil
 }
 
-func GetAllBooksOnEbay() map[string]DataTypes.EbayDataWithFeltrinelliAndMondadoriBook {
+func GetAllMondadoriBooksOnEbay() map[string]DataTypes.EbayDataWithMondadoriBook {
 	startTime := time.Now()
 
 	// Define the aggregation pipeline
@@ -303,19 +303,6 @@ func GetAllBooksOnEbay() map[string]DataTypes.EbayDataWithFeltrinelliAndMondador
 				{Key: "path", Value: "$MondadoriBook"},
 			}},
 		},
-		bson.D{
-			{Key: "$lookup", Value: bson.D{
-				{Key: "from", Value: "FeltrinelliBooks"},
-				{Key: "localField", Value: "EbayData.ISBN"},
-				{Key: "foreignField", Value: "ISBN"},
-				{Key: "as", Value: "FeltrinelliBook"},
-			}},
-		},
-		bson.D{
-			{Key: "$unwind", Value: bson.D{
-				{Key: "path", Value: "$FeltrinelliBook"},
-			}},
-		},
 	}
 
 	// Execute the aggregation pipeline
@@ -331,14 +318,14 @@ func GetAllBooksOnEbay() map[string]DataTypes.EbayDataWithFeltrinelliAndMondador
 	}(cursor, context.TODO())
 
 	// Iterate through the results
-	var results []DataTypes.EbayDataWithFeltrinelliAndMondadoriBook
+	var results []DataTypes.EbayDataWithMondadoriBook
 	if err = cursor.All(context.TODO(), &results); err != nil {
 		log.Fatal(err)
 	}
 
 	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
 
-	outputMap := make(map[string]DataTypes.EbayDataWithFeltrinelliAndMondadoriBook, len(results))
+	outputMap := make(map[string]DataTypes.EbayDataWithMondadoriBook, len(results))
 	for _, result := range results {
 		outputMap[result.MondadoriBook.ISBN] = result
 	}
