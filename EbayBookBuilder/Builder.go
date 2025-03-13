@@ -66,7 +66,7 @@ func getCategorySwitch(categoryName string) DataTypes.Category {
 	case "Famiglia Scuola e Università":
 		return DataTypes.LibriDiTesto
 	default:
-		_, _ = fmt.Fprintf(os.Stderr, "Didn't find a category id for %s\n", categoryName)
+		_, _ = fmt.Fprintf(os.Stdout, "[WARNING] Didn't find a category id for %s\n", categoryName)
 		return DataTypes.Saggistica
 	}
 }
