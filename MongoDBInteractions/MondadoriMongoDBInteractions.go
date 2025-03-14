@@ -323,7 +323,7 @@ func GetAllMondadoriBooksOnEbay() map[string]DataTypes.EbayDataWithMondadoriBook
 		log.Fatal(err)
 	}
 
-	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
+	fmt.Println("Finished getting all Mondadori books on Ebay in", time.Since(startTime).Seconds(), "seconds")
 
 	outputMap := make(map[string]DataTypes.EbayDataWithMondadoriBook, len(results))
 	for _, result := range results {

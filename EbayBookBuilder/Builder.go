@@ -81,11 +81,8 @@ func GetCategoryIDMondadori(category string) DataTypes.Category {
 }
 
 func getFinalPrice(originalPriceString string, competitionPrice float64) string {
-	// Convert string to float64
-	originalPrice, err := strconv.ParseFloat(originalPriceString, 64)
-	if err != nil {
-		panic(err)
-	}
+	originalPrice := convertPriceToFloat(originalPriceString)
+
 	finalPrice := (math.Max(originalPrice*0.1, 1) + originalPrice + 0.43) / 0.866
 	minPrice := (originalPrice + 0.10 + 0.43) / 0.866
 
@@ -181,28 +178,62 @@ func getFinalTitle(title string, author string, category string, language ...str
 	return title
 }
 
-func BuildEbayBooks(isbns []string) map[string]DataTypes.EbayBook {
+func BuildEbayBooks(isbns map[string]bool) map[string]DataTypes.EbayBook {
 	ebayBooks := make(map[string]DataTypes.EbayBook)
-	for _, isbn := range isbns {
+	for isbn := range isbns {
 		ebayBook := BuildEbayBook(isbn)
 		if ebayBook != nil {
 			ebayBooks[isbn] = *ebayBook
+		} else {
+			oldEbayBook := MongoDBInteractions.GetEbayBook(isbn)
+			if oldEbayBook != nil {
+				oldEbayBook.Available = false
+				ebayBooks[isbn] = *oldEbayBook
+			}
 		}
 	}
 	return ebayBooks
 }
 
-func BuildEbayBook(isbn string) *DataTypes.EbayBook {
-	mondadoriBook, err := MongoDBInteractions.GetMondadoriBook(isbn)
+func convertPriceToFloat(priceStr string) float64 {
+	price, err := strconv.ParseFloat(priceStr, 64)
 	if err != nil {
+		panic(err)
+	}
+	return price
+}
+
+func BuildEbayBook(isbn string) *DataTypes.EbayBook {
+	mondadoriBook, _ := MongoDBInteractions.GetMondadoriBook(isbn)
+	feltrinelliBook, _ := MongoDBInteractions.GetFeltrinelliBook(isbn)
+	if mondadoriBook == nil {
+		_, err := fmt.Fprintf(os.Stderr, "Mondadori book(%s) disappeared from database!", isbn)
+		if err != nil {
+			panic(err)
+		}
 		return nil
 	}
+
+	bestStorePrice := mondadoriBook.Price
+	marketIn := "Mondadori"
+	isMondadoriAvailable := mondadoriBook.Available == "Disponibilità immediata"
+	available := isMondadoriAvailable
+	if feltrinelliBook != nil && feltrinelliBook.Availability == "Disp. immediata" {
+		mondadoriPrice := convertPriceToFloat(mondadoriBook.Price)
+		feltrinelliPrice := convertPriceToFloat(feltrinelliBook.Price)
+		if feltrinelliPrice < mondadoriPrice {
+			bestStorePrice = feltrinelliBook.Price
+			marketIn = "Feltrinelli"
+			available = true
+		}
+	}
+
 	categoryID := GetCategoryIDMondadori(mondadoriBook.Categories[0])
-	available := mondadoriBook.Available == "Disponibilità immediata"
 	competitionPrice := Ebay.SearchMinCost(isbn)
-	price := getFinalPrice(mondadoriBook.Price, competitionPrice)
+	price := getFinalPrice(bestStorePrice, competitionPrice)
 	title := getFinalTitle(mondadoriBook.Title, mondadoriBook.Author, mondadoriBook.Categories[0])
-	ebayBook := DataTypes.EbayBook{ISBN: isbn,
+
+	return &DataTypes.EbayBook{ISBN: isbn,
 		CategoryID:    categoryID,
 		Available:     available,
 		Editor:        mondadoriBook.Editor,
@@ -213,9 +244,8 @@ func BuildEbayBook(isbn string) *DataTypes.EbayBook {
 		Title:         title,
 		PublishedFrom: mondadoriBook.PublishedFrom,
 		Pages:         mondadoriBook.Pages,
-		MarketIn:      "Mondadori",
+		MarketIn:      marketIn,
 		Description:   mondadoriBook.Description,
 		ImageURL:      mondadoriBook.ImageURL,
 	}
-	return &ebayBook
 }

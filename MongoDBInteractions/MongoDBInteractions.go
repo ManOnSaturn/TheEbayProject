@@ -66,41 +66,6 @@ func ConnectToMongo() {
 	fmt.Println("Pinged mongodb deployment. Successfully connected to MongoDB!")
 }
 
-func BulkInsertBooksToUpdate(books []DataTypes.BookToUpdate, isFeltrinelli bool) {
-	if len(books) == 0 {
-		return
-	}
-
-	var operations []mongo.WriteModel
-	for _, book := range books {
-		filter := bson.M{"ISBN": book.ISBN}
-		update := bson.M{"$set": bson.M{
-			"Price":               book.Price,
-			"PriceChanged":        book.PriceChanged,
-			"Available":           book.Available,
-			"AvailabilityChanged": book.AvailabilityChanged,
-		}}
-		upsert := mongo.NewUpdateOneModel()
-		upsert.SetFilter(filter)
-		upsert.SetUpdate(update)
-		upsert.SetUpsert(true)
-		operations = append(operations, upsert)
-	}
-	var collection *mongo.Collection
-	if isFeltrinelli {
-		collection = feltrinelliBooksToUpdateCollection
-	} else {
-		collection = mondadoriBooksToUpdateCollection
-	}
-	_, err := collection.BulkWrite(context.TODO(), operations)
-	if err != nil {
-		_, err := fmt.Fprintln(os.Stderr, "Error occurred while upserting books in MongoDB:", err)
-		if err != nil {
-			panic(err)
-		}
-	}
-}
-
 func GetAllEbayBooks() []DataTypes.EbayBook {
 	cursor, _ := ebayBooksCollection.Find(context.TODO(), bson.M{})
 	var ebayBooks []DataTypes.EbayBook
@@ -153,4 +118,14 @@ func UpsertEbayData(models []mongo.WriteModel) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func GetEbayBook(isbn string) *DataTypes.EbayBook {
+	filter := bson.M{"ISBN": isbn}
+	var ebayBook DataTypes.EbayBook
+	findOneError := ebayBooksCollection.FindOne(context.TODO(), filter).Decode(&ebayBook)
+	if findOneError != nil {
+		return nil
+	}
+	return &ebayBook
 }

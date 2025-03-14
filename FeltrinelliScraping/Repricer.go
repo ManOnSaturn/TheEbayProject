@@ -3,10 +3,10 @@ package FeltrinelliScraping
 import (
 	"Scraper/DataTypes"
 	"Scraper/MongoDBInteractions"
-	"Scraper/PythonInteractions"
 	"fmt"
 	"github.com/gocolly/colly/v2"
 	"github.com/imroc/req/v3"
+	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"net/http"
 	"os"
@@ -22,35 +22,14 @@ func Repricer() {
 
 	go scrapeRepricerBooks(ebayDataWithFeltrinelliBooks, bookPartialsChannel)
 
-	var booksToUpdate []DataTypes.BookToUpdate
+	updateModels := make([]mongo.WriteModel, 0)
 	for bookPartial := range bookPartialsChannel {
-		ebayDataWithFeltrinelliBook := ebayDataWithFeltrinelliBooks[bookPartial.ISBN]
-		booksToUpdate = addBookToUpdateToSlice(bookPartial, ebayDataWithFeltrinelliBook.FeltrinelliBook, booksToUpdate)
+		updateModels = append(updateModels, MongoDBInteractions.BuildFeltrinelliPriceOrAvailabilityUpdateModel(bookPartial))
 	}
 
-	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
+	fmt.Println("Finished Feltrinelli's scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
 
-	MongoDBInteractions.BulkInsertBooksToUpdate(booksToUpdate, true)
-	fmt.Println("Finished updating ", len(booksToUpdate), " books.")
-
-	PythonInteractions.StartPythonRepricer(len(booksToUpdate), true)
-}
-
-func addBookToUpdateToSlice(bookInfo DataTypes.BookPartial, feltrinelliBook DataTypes.FeltrinelliBook, booksToUpdate []DataTypes.BookToUpdate) []DataTypes.BookToUpdate {
-	bookToUpdate := DataTypes.BookToUpdate{ISBN: bookInfo.ISBN, Price: bookInfo.Price, PriceChanged: false, Available: bookInfo.Available, AvailabilityChanged: false}
-	if feltrinelliBook.Availability != bookInfo.Available {
-		bookToUpdate.AvailabilityChanged = true
-		fmt.Println("Availability changed to ", bookInfo.Available, " for ", bookInfo.ISBN)
-	}
-	if feltrinelliBook.Price != bookInfo.Price {
-		bookToUpdate.PriceChanged = true
-		fmt.Println("Price changed to ", bookInfo.Price, " for ", bookInfo.ISBN)
-	}
-
-	if bookToUpdate.AvailabilityChanged || bookToUpdate.PriceChanged {
-		booksToUpdate = append(booksToUpdate, bookToUpdate)
-	}
-	return booksToUpdate
+	MongoDBInteractions.UpdateFeltrinelliPriceOrAvailability(updateModels)
 }
 
 func scrapeRepricerBooks(ebayDataWithFeltrinelliBooks map[string]DataTypes.EbayDataWithFeltrinelliBook, bookPartialChannel chan<- DataTypes.BookPartial) {

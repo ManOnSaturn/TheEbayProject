@@ -68,23 +68,18 @@ func addstuf() {
 
 func reprice() {
 	var wg sync.WaitGroup
-	wg.Add(1)
-	//wg.Add(2)
-	//go func() {
-	//	defer wg.Done()
-	//	FeltrinelliScraping.Repricer()
-	//}()
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		FeltrinelliScraping.Repricer()
+	}()
 	go func() {
 		defer wg.Done()
 		MondadoriScraping.Repricer()
 	}()
 	wg.Wait()
 
-	ebayDatas := MongoDBInteractions.GetAllMondadoriBooksOnEbay()
-	isbns := make([]string, 0)
-	for _, ebayData := range ebayDatas {
-		isbns = append(isbns, ebayData.EbayData.ISBN)
-	}
+	isbns := getISBNsOfBooksOnEbay()
 
 	newEbayBooks := EbayBookBuilder.BuildEbayBooks(isbns)
 	oldEbayBooks := MongoDBInteractions.GetAllEbayBooks()
@@ -92,10 +87,9 @@ func reprice() {
 	var updateModels []mongo.WriteModel
 	for _, oldEbayBook := range oldEbayBooks {
 		if newEbayBook, ok := newEbayBooks[oldEbayBook.ISBN]; !ok {
-			// For some reason, we didn't get the book created. We don't know what happened, therefore we delete the
-			// entry from ebay completely.
+			// For some reason, we didn't get the book created. We don't know what happened.
 			MongoDBInteractions.AddBookToUpdate(oldEbayBook.ISBN)
-			MongoDBInteractions.DeleteEbayBook(oldEbayBook.ISBN)
+			updateModels = append(updateModels, MongoDBInteractions.CreateUpsertModelForEbayBooks(oldEbayBook))
 		} else if !newEbayBook.Equals(oldEbayBook) {
 			MongoDBInteractions.AddBookToUpdate(oldEbayBook.ISBN)
 			updateModels = append(updateModels, MongoDBInteractions.CreateUpsertModelForEbayBooks(newEbayBook))
@@ -103,5 +97,18 @@ func reprice() {
 	}
 
 	MongoDBInteractions.UpsertEbayBooks(updateModels)
-	PythonInteractions.StartPythonRepricer(len(updateModels), false)
+	PythonInteractions.StartPythonRepricer(len(updateModels))
+}
+
+func getISBNsOfBooksOnEbay() map[string]bool {
+	isbns := make(map[string]bool)
+	mondadoriBooksOnEbay := MongoDBInteractions.GetAllMondadoriBooksOnEbay()
+	for _, ebayData := range mondadoriBooksOnEbay {
+		isbns[ebayData.EbayData.ISBN] = true
+	}
+	feltrinelliBooksOnEbay := MongoDBInteractions.GetAllFeltrinelliBooksOnEbay()
+	for _, ebayData := range feltrinelliBooksOnEbay {
+		isbns[ebayData.EbayData.ISBN] = true
+	}
+	return isbns
 }

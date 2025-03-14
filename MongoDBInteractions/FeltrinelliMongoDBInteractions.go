@@ -57,11 +57,11 @@ func GetAllFeltrinelliBooksOnEbay() map[string]DataTypes.EbayDataWithFeltrinelli
 		log.Fatal(err)
 	}
 
-	fmt.Println("Finished getting all books in", time.Since(startTime).Seconds(), "seconds")
+	fmt.Println("Finished getting", len(results), "Feltrinelli books on Ebay in", time.Since(startTime).Seconds(), "seconds")
 
 	outputMap := make(map[string]DataTypes.EbayDataWithFeltrinelliBook, len(results))
 	for _, result := range results {
-		outputMap[result.FeltrinelliBook.ISBN] = DataTypes.EbayDataWithFeltrinelliBook{FeltrinelliBook: result.FeltrinelliBook, EbayData: result.EbayData}
+		outputMap[result.FeltrinelliBook.ISBN] = result
 	}
 	return outputMap
 }
@@ -282,4 +282,35 @@ func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
 	}
 
 	fmt.Println("Removed all unseen products in ", time.Since(startTime).Seconds(), "seconds.")
+}
+
+func BuildFeltrinelliPriceOrAvailabilityUpdateModel(bookPartial DataTypes.BookPartial) mongo.WriteModel {
+	model := mongo.NewUpdateOneModel()
+	model.SetFilter(bson.M{"ISBN": bookPartial.ISBN})
+	model.SetUpdate(bson.M{"Price": bookPartial.Price, "Availability": bookPartial.Available})
+	return model
+}
+
+func UpdateFeltrinelliPriceOrAvailability(models []mongo.WriteModel) {
+	if len(models) == 0 {
+		return
+	}
+
+	res, err := feltrinelliBooksCollection.BulkWrite(context.TODO(), models)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	fmt.Printf("Inserted %v and deleted %v documents\n", res.InsertedCount, res.DeletedCount)
+}
+
+func GetFeltrinelliBook(isbn string) (*DataTypes.FeltrinelliBook, error) {
+	filter := bson.M{"ISBN": isbn}
+	var result DataTypes.FeltrinelliBook
+	err := feltrinelliBooksCollection.FindOne(context.TODO(), filter).Decode(&result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
 }

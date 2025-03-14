@@ -6,17 +6,12 @@ import (
 	"os/exec"
 )
 
-func StartPythonRepricer(updates int, isFeltrinelli bool) {
+func StartPythonRepricer(updates int) {
 	// Start python repricer if there is any book to update.
 	if updates <= 0 {
 		return
 	}
-	var repricerString string
-	if isFeltrinelli {
-		repricerString = "--feltrinelliRepricer"
-	} else {
-		repricerString = "--repricer"
-	}
+	repricerString := "--repricer"
 	cmd := exec.Command("/bin/bash", "/home/mattia/repricer/start_repricer.sh", repricerString)
 	output, err := cmd.CombinedOutput()
 	if err != nil {

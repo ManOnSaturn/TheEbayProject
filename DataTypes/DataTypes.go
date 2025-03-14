@@ -10,14 +10,6 @@ type BookPartial struct {
 	Available string
 }
 
-type BookToUpdate struct {
-	ISBN                string
-	Price               string
-	PriceChanged        bool
-	Available           string
-	AvailabilityChanged bool
-}
-
 type MondadoriBook struct {
 	ISBN          string   `bson:"ISBN"`
 	URL           string   `bson:"URL"`
