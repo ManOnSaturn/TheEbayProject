@@ -27,9 +27,9 @@ func Repricer() {
 		updateModels = append(updateModels, MongoDBInteractions.BuildFeltrinelliPriceOrAvailabilityUpdateModel(bookPartial))
 	}
 
-	fmt.Println("Finished Feltrinelli's scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
-
 	MongoDBInteractions.UpdateFeltrinelliPriceOrAvailability(updateModels)
+
+	fmt.Println("Finished Feltrinelli's repricer in", time.Since(startTime).Seconds(), "seconds.")
 }
 
 func scrapeRepricerBooks(ebayDataWithFeltrinelliBooks map[string]DataTypes.EbayDataWithFeltrinelliBook, bookPartialChannel chan<- DataTypes.BookPartial) {

@@ -4,11 +4,15 @@ import (
 	"Scraper/DataTypes"
 	"Scraper/MongoDBInteractions"
 	"Scraper/Proxy"
+	"fmt"
 	"go.mongodb.org/mongo-driver/mongo"
 	"sync"
+	"time"
 )
 
 func Repricer() {
+	startTime := time.Now()
+
 	urlsChan := make(chan string, 100)
 	booksChan := make(chan *DataTypes.MondadoriBook, 100)
 	proxies := Proxy.GetProxies()
@@ -43,4 +47,6 @@ func Repricer() {
 	if len(models) > 0 {
 		MongoDBInteractions.UpsertMondadoriBooks(models)
 	}
+
+	fmt.Println("Finished Mondadori's repricer in ", time.Since(startTime).Seconds(), "seconds.")
 }
