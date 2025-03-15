@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"log"
-	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -29,22 +27,6 @@ func main() {
 
 	if len(os.Args) > 1 && os.Args[1] == "--repricer" {
 		reprice()
-	}
-
-	if len(os.Args) > 1 && os.Args[1] == "--fullScrapeFeltrinelli" {
-		go func() {
-			log.Println(http.ListenAndServe("0.0.0.0:8888", nil))
-			panic("what")
-		}()
-		FeltrinelliScraping.FullScrape()
-	}
-
-	if len(os.Args) > 1 && os.Args[1] == "--fullScrapeMondadori" {
-		MondadoriScraping.FullScrape()
-	}
-
-	if len(os.Args) > 1 && os.Args[1] == "--feltrinelliRepricer" {
-		FeltrinelliScraping.Repricer()
 	}
 
 	//addstuf()
