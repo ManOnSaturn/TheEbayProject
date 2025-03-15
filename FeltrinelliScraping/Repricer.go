@@ -64,7 +64,7 @@ func scrapeRepricerBooks(ebayDataWithFeltrinelliBooks map[string]DataTypes.EbayD
 
 	c.OnHTML("pdp-physical-buy-info", func(e *colly.HTMLElement) {
 		if e.Attr(":is-ebook") == "true" || e.Attr(":is-marketplace") == "true" {
-			log.Fatalf("Book during repricing is ebook or from marketplace")
+			log.Fatalf("Book during repricing is ebook or from marketplace. URL:", e.Request.URL.String())
 			return
 		}
 		EAN := GetEANFromPath(e.Request.URL.Path)
