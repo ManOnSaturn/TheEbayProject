@@ -21,6 +21,11 @@ func main() {
 	MongoDBInteractions.ConnectToMongo()
 	defer MongoDBInteractions.DisconnectFromMongo()
 
+	//go func() {
+	//	log.Println(http.ListenAndServe("0.0.0.0:8888", nil))
+	//	panic("what")
+	//}()
+
 	if len(os.Args) > 1 && os.Args[1] == "--scrapeBestsellers" {
 		AmazonScraping.ScrapeBestsellers()
 	}
@@ -29,7 +34,8 @@ func main() {
 		reprice()
 	}
 
-	//addstuf()
+	//FeltrinelliScraping.FullScrape()
+
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")
 }
 

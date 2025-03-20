@@ -26,8 +26,7 @@ var FeltrinelliProductsCollection *mongo.Collection
 var MondadoriProductsCollection *mongo.Collection
 var feltrinelliBooksCollection *mongo.Collection
 var MondadoriBooksCollection *mongo.Collection
-var feltrinelliBooksToUpdateCollection *mongo.Collection
-var mondadoriBooksToUpdateCollection *mongo.Collection
+var booksToUpdateCollection *mongo.Collection
 var BestsellersAmazonCollection *mongo.Collection
 var ebayDataCollection *mongo.Collection
 var ebayBooksCollection *mongo.Collection
@@ -46,7 +45,6 @@ func ConnectToMongo() {
 		panic(err)
 	}
 
-	//database := client.Database("Rimanga")
 	database := client.Database("Mondadori")
 	// Send a ping to confirm a successful connection
 
@@ -58,8 +56,7 @@ func ConnectToMongo() {
 	MondadoriProductsCollection = database.Collection("MondadoriProducts")
 	feltrinelliBooksCollection = database.Collection("FeltrinelliBooks")
 	MondadoriBooksCollection = database.Collection("MondadoriBooks")
-	mondadoriBooksToUpdateCollection = database.Collection("BooksToUpdate")
-	feltrinelliBooksToUpdateCollection = database.Collection("FeltrinelliBooksToUpdate")
+	booksToUpdateCollection = database.Collection("BooksToUpdate")
 	BestsellersAmazonCollection = database.Collection("BestsellersAmazon")
 	ebayDataCollection = database.Collection("EbayData")
 	ebayBooksCollection = database.Collection("EbayBooks")
@@ -80,7 +77,7 @@ func AddBookToUpdate(isbn string) {
 	filter := bson.M{"ISBN": isbn}
 	update := bson.M{"$set": bson.M{"ISBN": isbn}}
 	updateOptions := options.Update().SetUpsert(true)
-	_, err := mondadoriBooksToUpdateCollection.UpdateOne(context.TODO(), filter, update, updateOptions)
+	_, err := booksToUpdateCollection.UpdateOne(context.TODO(), filter, update, updateOptions)
 	if err != nil {
 		panic(err)
 	}

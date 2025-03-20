@@ -152,48 +152,6 @@ func InsertFeltrinelliScrapedBook(feltrinelliScrapedBook *DataTypes.FeltrinelliS
 	SetProductIsBook(feltrinelliScrapedBook.BuyInfos.URL, true)
 }
 
-func SetProductProblematic(URL string, isProblematic bool) {
-	filter := bson.M{"URL": URL}
-
-	update := bson.M{
-		"$set": bson.M{
-			"IsProblematic": isProblematic,
-		},
-	}
-	_, err := FeltrinelliProductsCollection.UpdateOne(context.TODO(), filter, update)
-	if err != nil {
-		log.Fatalf("Failed to set product is book: %v", err)
-	}
-}
-
-func SetNewURLAndIsBook(originalURL string, URL string, isBook bool) {
-	filter := bson.M{"URL": originalURL}
-
-	update := bson.M{
-		"$set": bson.M{
-			"URL":    URL,
-			"IsBook": isBook,
-		},
-		"$push": bson.M{
-			"PreviousURLs": originalURL,
-		},
-	}
-	_, err := FeltrinelliProductsCollection.UpdateOne(context.TODO(), filter, update)
-	if err != nil {
-		log.Fatalf("Failed to update product: %v", err)
-	}
-
-	updateBook := bson.M{
-		"$set": bson.M{
-			"URL": URL,
-		},
-	}
-	_, err = feltrinelliBooksCollection.UpdateOne(context.TODO(), filter, updateBook)
-	if err != nil {
-		log.Fatalf("Failed to update URL for book: %v", err)
-	}
-}
-
 func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
 	fmt.Println("Removing all unseen products")
 	startTime := time.Now()
@@ -266,7 +224,7 @@ func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
 			model := mongo.NewUpdateOneModel()
 			model.SetFilter(bson.M{"ISBN": ISBN})
 			model.SetUpsert(true)
-			model.SetUpdate(bson.M{"$set": bson.M{"ISBN": ISBN, "Available": "Rimosso", "AvailabilityChanged": true, "Price": "", "PriceChanged": false}})
+			model.SetUpdate(bson.M{"$set": bson.M{"ISBN": ISBN}})
 			booksToUpdateModels = append(booksToUpdateModels, model)
 		}
 	}
@@ -274,7 +232,7 @@ func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
 	// TODO reason about whether this is actually needed, or needs to be checked during repricing, or both
 	if len(booksToUpdateModels) > 0 {
 		fmt.Println("Storing books which disappeared as books to update")
-		_, err = feltrinelliBooksToUpdateCollection.BulkWrite(context.TODO(), booksToUpdateModels)
+		_, err = booksToUpdateCollection.BulkWrite(context.TODO(), booksToUpdateModels)
 		if err != nil {
 			_, err = fmt.Fprintln(os.Stderr, "Error occurred during bulk write operation:", err)
 			return
@@ -301,7 +259,7 @@ func UpdateFeltrinelliPriceOrAvailability(models []mongo.WriteModel) {
 		log.Panic(err)
 	}
 
-	fmt.Printf("Inserted %v and deleted %v documents\n", res.InsertedCount, res.DeletedCount)
+	fmt.Printf("Inserted %v and modified %v feltrinelli books\n", res.InsertedCount, res.ModifiedCount)
 }
 
 func GetFeltrinelliBook(isbn string) (*DataTypes.FeltrinelliBook, error) {
@@ -313,4 +271,15 @@ func GetFeltrinelliBook(isbn string) (*DataTypes.FeltrinelliBook, error) {
 	}
 
 	return &result, nil
+}
+
+func DeleteFeltrinelliBook(URL string) {
+	filter := bson.M{"URL": URL}
+	result, err := feltrinelliBooksCollection.DeleteOne(context.TODO(), filter)
+	if err != nil {
+		panic(err)
+	}
+	if result != nil && result.DeletedCount < 1 {
+		panic("Feltrinelli book was not deleted. URL:" + URL)
+	}
 }

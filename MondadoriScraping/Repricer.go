@@ -1,6 +1,7 @@
 package MondadoriScraping
 
 import (
+	"Scraper/ChromeClient"
 	"Scraper/DataTypes"
 	"Scraper/MongoDBInteractions"
 	"Scraper/Proxy"
@@ -20,7 +21,8 @@ func Repricer() {
 	wg := sync.WaitGroup{}
 	wg.Add(len(proxies))
 
-	fakeChrome := getChromeClient()
+	fakeChrome := ChromeClient.GetChromeClient()
+
 	for _, proxy := range proxies {
 		go func(proxy string) {
 			defer wg.Done()

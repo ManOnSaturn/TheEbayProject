@@ -92,7 +92,7 @@ func RemoveAllUnseenProductsAndBooksMondadori(lastSeen time.Time) {
 	// TODO reason about whether this is actually needed, or needs to be checked during repricing, or both
 	if len(booksToUpdateModels) > 0 {
 		fmt.Println("Storing books which disappeared as books to update")
-		_, err = mondadoriBooksToUpdateCollection.BulkWrite(context.TODO(), booksToUpdateModels)
+		_, err = booksToUpdateCollection.BulkWrite(context.TODO(), booksToUpdateModels)
 		if err != nil {
 			_, err = fmt.Fprintln(os.Stderr, "Error occurred during bulk write operation:", err)
 			return

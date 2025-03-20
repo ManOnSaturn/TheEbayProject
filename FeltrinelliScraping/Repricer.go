@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -39,13 +40,8 @@ func scrapeRepricerBooks(ebayDataWithFeltrinelliBooks map[string]DataTypes.EbayD
 		Transport: fakeChrome.Transport,
 		Timeout:   30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			//reqURL := req.URL.String()
-			//originalReqURL := via[len(via)-1].URL.String()
-			//if areURLsForSameBook(originalReqURL, reqURL) {
-			//	setNewURLAndIsBook(originalReqURL, reqURL, true)
-			//	return nil
-			//}
-			//setProductIsBook(originalReqURL, false)
+			originalReqURL := via[len(via)-1].URL.String()
+			MongoDBInteractions.SetProductIsBook(originalReqURL, false)
 			return fmt.Errorf("redirects are not allowed")
 		},
 	})
@@ -61,12 +57,17 @@ func scrapeRepricerBooks(ebayDataWithFeltrinelliBooks map[string]DataTypes.EbayD
 
 	semaphore := DataTypes.NewSemaphore(50)
 	booksMap := make(map[string]DataTypes.BookPartial)
+	booksMapLock := sync.Mutex{}
 
 	c.OnHTML("pdp-physical-buy-info", func(e *colly.HTMLElement) {
-		if e.Attr(":is-ebook") == "true" || e.Attr(":is-marketplace") == "true" {
-			log.Fatalf("Book during repricing is ebook or from marketplace. URL:", e.Request.URL.String())
+		if e.Attr(":is-ebook") == "true" {
+			// This should never happen. If it's happening, it means that an ebook has the same url of a normal book
+			log.Fatalf("Book during repricing is ebook. URL: %s", e.Request.URL.String())
+			//MongoDBInteractions.SetProductIsBook(e.Request.URL.String(), false)
+			//MongoDBInteractions.DeleteFeltrinelliBook(e.Request.URL.String())
 			return
 		}
+
 		EAN := GetEANFromPath(e.Request.URL.Path)
 		var inventoryJSON DataTypes.InventoryJSON
 		if UnmarshalJSON([]byte(e.Attr(":inventory")), &inventoryJSON) != nil {
@@ -77,22 +78,32 @@ func scrapeRepricerBooks(ebayDataWithFeltrinelliBooks map[string]DataTypes.EbayD
 			return
 		}
 
+		availabilityText := availabilityJSON.Text
+		if e.Attr(":is-marketplace") == "true" {
+			availabilityText = "Marketplace only"
+		}
+
 		price, _ := MongoDBInteractions.FormatNumberIntoString(inventoryJSON.Price)
+		booksMapLock.Lock()
 		booksMap[EAN] = DataTypes.BookPartial{
 			Price:     price,
-			Available: availabilityJSON.Text,
+			Available: availabilityText,
 		}
+		booksMapLock.Unlock()
 	})
 
 	c.OnScraped(func(response *colly.Response) {
 		semaphore.Release()
 		EAN := GetEANFromPath(response.Request.URL.Path)
+
+		booksMapLock.Lock()
 		if fullBook, ok := booksMap[EAN]; !ok {
 			log.Fatalf("Failed to retrieve EAN in booksMap: %s", EAN)
 		} else {
 			bookPartialChannel <- fullBook
 			delete(booksMap, EAN)
 		}
+		booksMapLock.Unlock()
 	})
 
 	c.OnError(func(response *colly.Response, err error) {

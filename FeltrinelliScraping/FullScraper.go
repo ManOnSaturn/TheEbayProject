@@ -1,8 +1,10 @@
 package FeltrinelliScraping
 
 import (
+	"Scraper/ChromeClient"
 	"Scraper/DataTypes"
 	"Scraper/MongoDBInteractions"
+	"Scraper/Proxy"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -25,7 +27,7 @@ import (
 func FullScrape() {
 	startTime := time.Now()
 
-	scrapeAllXMLs()
+	//scrapeAllXMLs()
 
 	urlsChan := make(chan string)
 	go getNewProducts(urlsChan)
@@ -33,10 +35,25 @@ func FullScrape() {
 
 	fullBooksChan := make(chan *DataTypes.FeltrinelliScrapedBook)
 
-	go getProductInfos(urlsChan, fullBooksChan)
-	handleScrapedBooks(fullBooksChan)
+	proxies := Proxy.GetProxies()
+	wg := sync.WaitGroup{}
+	wg.Add(len(proxies))
 
-	fmt.Println("Finished scraping book infos in ", time.Since(startTime).Seconds(), "seconds.")
+	fakeChrome := ChromeClient.GetChromeClient()
+
+	for _, proxy := range proxies {
+		go func(proxy string) {
+			defer wg.Done()
+			getProductInfos(urlsChan, fullBooksChan, proxy, fakeChrome)
+		}(proxy)
+	}
+
+	go handleScrapedBooks(fullBooksChan)
+
+	wg.Wait()
+	close(fullBooksChan)
+
+	fmt.Println("Finished Feltrinelli full scraping in ", time.Since(startTime).Seconds(), "seconds.")
 }
 
 func downloadAndParseXML(url string) (*DataTypes.UrlSet, error) {
@@ -86,7 +103,8 @@ func scrapeAllXMLs() {
 	baseURL := "https://www.lafeltrinelli.it/sitemap_itbook_"
 	urlSets := make([]DataTypes.UrlSet, 0)
 
-	for i := 1; i <= 70; i++ {
+	startTime := time.Now() // This took about 103 seconds
+	for i := 1; i <= fetchNumberOfSitemaps(); i++ {
 		// Construct the URL
 		url := baseURL + strconv.Itoa(i) + ".xml"
 
@@ -98,10 +116,13 @@ func scrapeAllXMLs() {
 		}
 		urlSets = append(urlSets, *urlSet)
 	}
+	fmt.Printf("Finished getting all feltrinelli book's URLs from sitemaps in %g\n", time.Since(startTime).Seconds())
+
 	var models []mongo.WriteModel
 
 	lastSeen := time.Now()
 
+	startTime = time.Now() // This takes about 236 seconds
 	for urlSetsIndex, urlSet := range urlSets {
 		for _, entry := range urlSet.URLs {
 			filter := bson.M{"URL": entry.Loc}
@@ -126,7 +147,7 @@ func scrapeAllXMLs() {
 			if len(models) >= 10000 {
 				MongoDBInteractions.BulkWriteFeltrinelliProducts(models)
 				models = make([]mongo.WriteModel, 0)
-				fmt.Println("Processed 10000 XML entries into the DB.")
+
 				fmt.Println("Working URLSet index", urlSetsIndex, "out of", len(urlSets))
 			}
 		}
@@ -137,13 +158,93 @@ func scrapeAllXMLs() {
 		fmt.Println("Processing last", len(models), " into the DB.")
 		MongoDBInteractions.BulkWriteFeltrinelliProducts(models)
 	}
+	fmt.Printf("Finished processing all URLs in %g\n", time.Since(startTime).Seconds())
 
 	MongoDBInteractions.RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen)
 }
 
+func fetchNumberOfSitemaps() int {
+	// Fetch the XML content from the URL
+	err, resp := getRequestWithHeader("https://www.lafeltrinelli.it/sitemap_itbook_index.xml")
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			fmt.Println("error closing body", err)
+		}
+	}(resp.Body)
+
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("Error reading response body:", err)
+		return -1
+	}
+
+	// Parse the XML
+	var sitemapIndex DataTypes.SitemapIndex
+	err = xml.Unmarshal(body, &sitemapIndex)
+	if err != nil {
+		fmt.Println("Error parsing XML:", err)
+		return -1
+	}
+
+	// Define the regex pattern to match the links
+	pattern := regexp.MustCompile(`https://www\.lafeltrinelli\.it/sitemap_itbook_(\d+)\.xml`)
+
+	maxNumber := 0
+
+	// Iterate over the URLs and find the one with the highest number
+	for _, sitemapObject := range sitemapIndex.Sitemaps {
+		matches := pattern.FindStringSubmatch(sitemapObject.Loc)
+		if len(matches) == 2 {
+			number, err := strconv.Atoi(matches[1])
+			if err != nil {
+				fmt.Println("Error converting number:", err)
+				continue
+			}
+			if number > maxNumber {
+				maxNumber = number
+			}
+		}
+	}
+
+	return maxNumber
+}
+
+func getRequestWithHeader(url string) (error, *http.Response) {
+	// Create a new HTTP request
+	request, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("error creating request: %v", err), nil
+	}
+
+	// Set a custom User-Agent
+	request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36")
+
+	// Send the request
+	client := &http.Client{}
+	resp, err := client.Do(request)
+	if err != nil {
+		return fmt.Errorf("error making request: %v", err), resp
+	}
+
+	// Check if the response status code is OK
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("error: Received non-200 response code: %d", resp.StatusCode), nil
+	}
+
+	return err, resp
+}
+
 func getNewProducts(urlsChan chan string) {
 	// Filter for documents where the field 'IsBook' does not exist
-	filter := bson.M{"IsBook": bson.M{"$exists": false}}
+	//filter := bson.M{"IsBook": bson.M{"$exists": false}}
+	filter := bson.M{
+		"$or": []bson.M{
+			{"IsBook": false},
+			{"IsBook": bson.M{"$exists": false}},
+		},
+	}
 	todoContext := context.TODO()
 
 	documentsCount, _ := MongoDBInteractions.FeltrinelliProductsCollection.CountDocuments(todoContext, filter)
@@ -208,48 +309,36 @@ func cleanDescription(input string) string {
 	return re.ReplaceAllString(trimmed, " ")
 }
 
-func areURLsForSameBook(URL1 string, URL2 string) bool {
-	if len(URL1) >= 13 && len(URL2) >= 13 {
-		if URL1[len(URL1)-13:] == URL2[len(URL2)-13:] {
-			return true
-		}
-	}
-	return false
-}
-
-func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *DataTypes.FeltrinelliScrapedBook) {
-	fakeChrome := req.DefaultClient().ImpersonateChrome()
-	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")), colly.Async(true))
+func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *DataTypes.FeltrinelliScrapedBook, proxy string, fakeChrome *req.Client) {
+	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")))
 	c.SetClient(&http.Client{
 		Transport: fakeChrome.Transport,
 		Timeout:   30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			reqURL := req.URL.String()
 			originalReqURL := via[len(via)-1].URL.String()
-			if areURLsForSameBook(originalReqURL, reqURL) {
-				MongoDBInteractions.SetNewURLAndIsBook(originalReqURL, reqURL, true)
-				return nil
-			}
 			MongoDBInteractions.SetProductIsBook(originalReqURL, false)
 			return fmt.Errorf("redirects are not allowed")
 		},
 	})
 
-	err := c.Limit(&colly.LimitRule{
-		DomainGlob:  "*",
-		Parallelism: 10,
+	c.WithTransport(&http.Transport{
+		DisableKeepAlives: true,
 	})
+
+	err := c.Limit(&colly.LimitRule{DomainGlob: "*"})
+	if err != nil {
+		panic(err)
+	}
+	err = c.SetProxy(proxy)
 	if err != nil {
 		panic(err)
 	}
 	c.SetRequestTimeout(30 * time.Second)
 
-	semaphore := DataTypes.NewSemaphore(50)
-	booksMap := make(map[string]*DataTypes.FeltrinelliScrapedBook)
-	booksMapLock := sync.Mutex{}
+	fullBook := &DataTypes.FeltrinelliScrapedBook{}
 
 	c.OnHTML("pdp-physical-buy-info", func(e *colly.HTMLElement) {
-		if e.Attr(":is-ebook") == "true" || e.Attr(":is-marketplace") == "true" {
+		if e.Attr(":is-ebook") == "true" {
 			MongoDBInteractions.SetProductIsBook(e.Request.URL.String(), false)
 			e.Request.Ctx.Put("Skip", true)
 			return
@@ -264,44 +353,40 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *DataTypes.Fel
 			return
 		}
 
+		availabilityText := availabilityJSON.Text
+		if e.Attr(":is-marketplace") == "true" {
+			availabilityText = "Marketplace only"
+		}
+
 		title := e.Attr(":product-title")
 		title = title[1 : len(title)-1]
 		buyInfos := DataTypes.BuyInfos{Price: inventoryJSON.Price,
 			Title:        title,
-			Availability: availabilityJSON.Text,
+			Availability: availabilityText,
 			URL:          e.Request.URL.String(),
 			ISBN:         EAN}
-		//ImageURL: "https://www.lafeltrinelli.it/images/" + EAN + "_0_536_0_75.jpg"
-		booksMapLock.Lock()
-		booksMap[EAN] = &DataTypes.FeltrinelliScrapedBook{}
-		booksMap[EAN].BuyInfos = buyInfos
-		booksMapLock.Unlock()
+
+		fullBook.BuyInfos = buyInfos
 	})
 
 	c.OnHTML("ul.cc-breadcrumbs-list", func(e *colly.HTMLElement) {
 		if e.Request.Ctx.GetAny("Skip") == true {
 			return
 		}
+
 		var breadcrumbTexts []string
 		e.ForEach("span", func(i int, element *colly.HTMLElement) {
 			breadcrumbTexts = append(breadcrumbTexts, element.Text)
 		})
-		EAN := GetEANFromPath(e.Request.URL.Path)
-		booksMapLock.Lock()
-		if _, ok := booksMap[EAN]; ok {
-			booksMap[EAN].Category = strings.Join(breadcrumbTexts[2:], " > ")
-		} else {
-			MongoDBInteractions.SetProductProblematic(e.Request.URL.String(), true)
-			e.Request.Ctx.Put("Skip", true)
-		}
-		booksMapLock.Unlock()
+
+		fullBook.Category = strings.Join(breadcrumbTexts[2:], " > ")
 	})
 
 	c.OnHTML("div.cc-content-text.cc-clamp.cc-clamp--7", func(e *colly.HTMLElement) {
 		if e.Request.Ctx.GetAny("Skip") == true {
 			return
 		}
-		EAN := GetEANFromPath(e.Request.URL.Path)
+
 		var descriptionParagraphs []string
 		e.ForEach("p", func(i int, element *colly.HTMLElement) {
 			descriptionParagraphs = append(descriptionParagraphs, element.Text)
@@ -312,16 +397,15 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *DataTypes.Fel
 		} else {
 			descriptionData = DataTypes.DescriptionData{ShortDescription: cleanDescription(e.Text)}
 		}
-		booksMapLock.Lock()
-		booksMap[EAN].DescriptionData = descriptionData
-		booksMapLock.Unlock()
+
+		fullBook.DescriptionData = descriptionData
 	})
 
 	c.OnHTML("div#pdp-dettagli", func(e *colly.HTMLElement) {
 		if e.Request.Ctx.GetAny("Skip") == true {
 			return
 		}
-		EAN := GetEANFromPath(e.Request.URL.Path)
+
 		details := map[string]string{}
 		e.ForEach("div.cc-em-content-body", func(i int, e2 *colly.HTMLElement) {
 			e2.ForEach("div.cc-item", func(i int, e3 *colly.HTMLElement) {
@@ -341,29 +425,18 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *DataTypes.Fel
 			})
 		})
 
-		booksMapLock.Lock()
-		booksMap[EAN].Details = details
-		booksMapLock.Unlock()
+		fullBook.Details = details
 	})
 
 	c.OnScraped(func(response *colly.Response) {
-		semaphore.Release()
 		if response.Request.Ctx.GetAny("Skip") == true {
 			return
 		}
-		EAN := GetEANFromPath(response.Request.URL.Path)
-		booksMapLock.Lock()
-		if fullBook, ok := booksMap[EAN]; !ok {
-			log.Fatalf("Failed to retrieve EAN in booksMap: %s", EAN)
-		} else {
-			fullBooksChan <- fullBook
-			delete(booksMap, EAN)
-		}
-		booksMapLock.Unlock()
+		fullBooksChan <- fullBook
+		fullBook = &DataTypes.FeltrinelliScrapedBook{}
 	})
 
 	c.OnError(func(response *colly.Response, err error) {
-		semaphore.Release()
 		_, err2 := fmt.Fprintf(os.Stderr, "error for request:%s, %v\n", response.Request.URL, err)
 		if err2 != nil {
 			panic(err2)
@@ -371,14 +444,15 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *DataTypes.Fel
 	})
 
 	for url := range urlsChan {
-		semaphore.Acquire()
 		err := c.Visit(url)
-		if err != nil {
-			log.Fatalf("Failed to visit:%s", err)
+		if err != nil && !strings.Contains(err.Error(), "redirects are not allowed") {
+			_, errFmt := fmt.Fprintf(os.Stderr, "Failed to visit:%s\n", err)
+			if errFmt != nil {
+				panic(errFmt)
+			}
 		}
 	}
 	c.Wait()
-	close(fullBooksChan)
 }
 
 func testSendingProducts(urlsChan chan<- string) {
