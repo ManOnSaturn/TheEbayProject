@@ -1,6 +1,7 @@
 package Ebay
 
 import (
+	"Scraper/EbayBookBuilder/PriceConversion"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -68,10 +69,7 @@ func SearchMinCost(isbn string) float64 {
 			}
 
 			shippingCost := shippingOptions[0].(map[string]interface{})["shippingCost"].(map[string]interface{})
-			shipping, err := strconv.ParseFloat(shippingCost["value"].(string), 64)
-			if err != nil {
-				continue
-			}
+			shipping := PriceConversion.ConvertPriceToFloat(shippingCost["value"].(string))
 
 			minCost = math.Min(price+shipping, minCost)
 		}

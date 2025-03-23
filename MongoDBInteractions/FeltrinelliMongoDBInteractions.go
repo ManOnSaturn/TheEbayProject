@@ -245,7 +245,7 @@ func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
 func BuildFeltrinelliPriceOrAvailabilityUpdateModel(bookPartial DataTypes.BookPartial) mongo.WriteModel {
 	model := mongo.NewUpdateOneModel()
 	model.SetFilter(bson.M{"ISBN": bookPartial.ISBN})
-	model.SetUpdate(bson.M{"Price": bookPartial.Price, "Availability": bookPartial.Available})
+	model.SetUpdate(bson.M{"$set": bson.M{"Price": bookPartial.Price, "Availability": bookPartial.Available}})
 	return model
 }
 

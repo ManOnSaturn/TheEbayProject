@@ -3,11 +3,11 @@ package EbayBookBuilder
 import (
 	"Scraper/DataTypes"
 	"Scraper/Ebay"
+	"Scraper/EbayBookBuilder/PriceConversion"
 	"Scraper/MongoDBInteractions"
 	"fmt"
 	"math"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -81,7 +81,7 @@ func GetCategoryIDMondadori(category string) DataTypes.Category {
 }
 
 func getFinalPrice(originalPriceString string, competitionPrice float64) string {
-	originalPrice := convertPriceToFloat(originalPriceString)
+	originalPrice := PriceConversion.ConvertPriceToFloat(originalPriceString)
 
 	finalPrice := (math.Max(originalPrice*0.1, 1) + originalPrice + 0.43) / 0.866
 	minPrice := (originalPrice + 0.10 + 0.43) / 0.866
@@ -195,14 +195,6 @@ func BuildEbayBooks(isbns map[string]bool) map[string]DataTypes.EbayBook {
 	return ebayBooks
 }
 
-func convertPriceToFloat(priceStr string) float64 {
-	price, err := strconv.ParseFloat(priceStr, 64)
-	if err != nil {
-		panic(err)
-	}
-	return price
-}
-
 func BuildEbayBook(isbn string) *DataTypes.EbayBook {
 	mondadoriBook, _ := MongoDBInteractions.GetMondadoriBook(isbn)
 	feltrinelliBook, _ := MongoDBInteractions.GetFeltrinelliBook(isbn)
@@ -219,8 +211,8 @@ func BuildEbayBook(isbn string) *DataTypes.EbayBook {
 	isMondadoriAvailable := mondadoriBook.Available == "Disponibilità immediata"
 	available := isMondadoriAvailable
 	if feltrinelliBook != nil && feltrinelliBook.Availability == "Disp. immediata" {
-		mondadoriPrice := convertPriceToFloat(mondadoriBook.Price)
-		feltrinelliPrice := convertPriceToFloat(feltrinelliBook.Price)
+		mondadoriPrice := PriceConversion.ConvertPriceToFloat(mondadoriBook.Price)
+		feltrinelliPrice := PriceConversion.ConvertPriceToFloat(feltrinelliBook.Price)
 		if feltrinelliPrice < mondadoriPrice {
 			bestStorePrice = feltrinelliBook.Price
 			marketIn = "Feltrinelli"
