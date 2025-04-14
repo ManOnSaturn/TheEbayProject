@@ -40,7 +40,8 @@ func getPrunedASINs(ASINs []string) []string {
 }
 
 func ScrapeBestsellers() {
-	asins := getASINs()
+	links := getLinksFromBestsellerPages()
+	asins := extractASINsFromLinks(links)
 	prunedASINs := getPrunedASINs(asins)
 	ASINISBNPairs, kindleASINs := getISBNs(prunedASINs)
 
@@ -162,7 +163,7 @@ func addAsinsToQ(asinsFailed []string, q *queue.Queue) {
 }
 
 // span#productSubtitle   Formato Kindle
-func getASINs() []string {
+func getLinksFromBestsellerPages() []string {
 	URLs := []string{
 		"https://www.amazon.it/gp/bestsellers/books",
 		"https://www.amazon.it/gp/bestsellers/books/13077484031", // Adolescenti e ragazzi
@@ -227,6 +228,10 @@ func getASINs() []string {
 
 	c.Wait()
 
+	return links
+}
+
+func extractASINsFromLinks(links []string) []string {
 	var itemArrays [][]Item
 	for _, link := range links {
 		var items []Item
