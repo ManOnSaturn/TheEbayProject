@@ -27,7 +27,7 @@ var MondadoriProductsCollection *mongo.Collection
 var feltrinelliBooksCollection *mongo.Collection
 var MondadoriBooksCollection *mongo.Collection
 var booksToUpdateCollection *mongo.Collection
-var BestsellersAmazonCollection *mongo.Collection
+var bestsellersAmazonCollection *mongo.Collection
 var ebayDataCollection *mongo.Collection
 var ebayBooksCollection *mongo.Collection
 
@@ -57,7 +57,7 @@ func ConnectToMongo() {
 	feltrinelliBooksCollection = database.Collection("FeltrinelliBooks")
 	MondadoriBooksCollection = database.Collection("MondadoriBooks")
 	booksToUpdateCollection = database.Collection("BooksToUpdate")
-	BestsellersAmazonCollection = database.Collection("BestsellersAmazon")
+	bestsellersAmazonCollection = database.Collection("BestsellersAmazon")
 	ebayDataCollection = database.Collection("EbayData")
 	ebayBooksCollection = database.Collection("EbayBooks")
 	fmt.Println("Pinged mongodb deployment. Successfully connected to MongoDB!")

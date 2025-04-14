@@ -231,3 +231,8 @@ func (b EbayBook) Equals(other EbayBook) bool {
 		b.Description == other.Description &&
 		b.ImageURL == other.ImageURL
 }
+
+type ASINISBNPair struct {
+	ASIN string
+	ISBN string
+}

@@ -1,14 +1,13 @@
 package AmazonScraping
 
 import (
+	"Scraper/DataTypes"
 	"Scraper/MongoDBInteractions"
-	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/gocolly/colly/v2"
 	"github.com/gocolly/colly/v2/queue"
 	"github.com/imroc/req/v3"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"net/http"
@@ -24,15 +23,10 @@ type Item struct {
 	ID string `json:"id"`
 }
 
-func getPrunedASINs(ASINs []string) []string {
+func getUnknownASINsFromList(ASINs []string) []string {
 	prunedASINs := make([]string, 0)
 	for _, ASIN := range ASINs {
-		count, err := MongoDBInteractions.BestsellersAmazonCollection.CountDocuments(context.TODO(), bson.D{{"ASIN", ASIN}})
-		if err != nil {
-			break
-		}
-
-		if count == 0 {
+		if !MongoDBInteractions.IsASINStored(ASIN) {
 			prunedASINs = append(prunedASINs, ASIN)
 		}
 	}
@@ -42,66 +36,36 @@ func getPrunedASINs(ASINs []string) []string {
 func ScrapeBestsellers() {
 	links := getLinksFromBestsellerPages()
 	asins := extractASINsFromLinks(links)
-	prunedASINs := getPrunedASINs(asins)
-	ASINISBNPairs, kindleASINs := getISBNs(prunedASINs)
+	prunedASINs := getUnknownASINsFromList(asins)
+	ASINISBNPairs, kindleASINs := getISBNsFromASINs(prunedASINs)
 
-	result := insertISBNs(ASINISBNPairs)
-	fmt.Printf("(Normal books) Upserted %d documents and modified %d documents.\n", result.UpsertedCount, result.ModifiedCount)
+	insertISBNs(ASINISBNPairs)
+	insertASINsKindle(kindleASINs)
+}
 
-	result = insertASINsKindle(kindleASINs)
+func insertASINsKindle(asinsKindle []string) {
+	var bulkOps []mongo.WriteModel
+	for _, asin := range asinsKindle {
+		model := MongoDBInteractions.BuildAmazonBestsellerIsKindleUpdateModel(asin)
+		bulkOps = append(bulkOps, model)
+	}
+
+	result := MongoDBInteractions.BulkWriteBestsellers(bulkOps)
 	fmt.Printf("(Kindle books) Upserted %d documents and modified %d documents.\n", result.UpsertedCount, result.ModifiedCount)
 }
 
-func insertASINsKindle(asinsKindle []string) *mongo.BulkWriteResult {
-	var bulkOps []mongo.WriteModel
-	for _, asin := range asinsKindle {
-		filter := bson.D{{"ASIN", asin}}
-		update := bson.D{
-			{"$set", bson.D{
-				{"ASIN", asin},
-				{"isKindle", true}}},
-		}
-		bulkOps = append(bulkOps, mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true))
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	// Execute the bulk write
-	result, err := MongoDBInteractions.BestsellersAmazonCollection.BulkWrite(ctx, bulkOps)
-	if err != nil {
-		log.Fatalf("Failed to execute bulk write: %v", err)
-	}
-	return result
-}
-
-func insertISBNs(ASINISBNPairs []ASINISBNPair) *mongo.BulkWriteResult {
+func insertISBNs(ASINISBNPairs []DataTypes.ASINISBNPair) {
 	var bulkOps []mongo.WriteModel
 	for _, pair := range ASINISBNPairs {
-		filter := bson.D{{"ISBN", pair.ISBN}}
-		update := bson.D{
-			{"$set", bson.D{
-				{"ASIN", pair.ASIN},
-				{"ISBN", pair.ISBN}}},
-		}
-		bulkOps = append(bulkOps, mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true))
+		model := MongoDBInteractions.BuildAmazonBestsellerISBNUpdateModel(pair)
+		bulkOps = append(bulkOps, model)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	// Execute the bulk write
-	result, err := MongoDBInteractions.BestsellersAmazonCollection.BulkWrite(ctx, bulkOps)
-	if err != nil {
-		log.Fatalf("Failed to execute bulk write: %v", err)
-	}
-	return result
+	result := MongoDBInteractions.BulkWriteBestsellers(bulkOps)
+	fmt.Printf("(Normal books) Upserted %d documents and modified %d documents.\n", result.UpsertedCount, result.ModifiedCount)
 }
 
-type ASINISBNPair struct {
-	ASIN string
-	ISBN string
-}
-
-func getISBNs(asins []string) ([]ASINISBNPair, []string) {
+func getISBNsFromASINs(asins []string) ([]DataTypes.ASINISBNPair, []string) {
 	fakeChrome := req.DefaultClient().ImpersonateChrome()
 
 	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")))
@@ -111,7 +75,7 @@ func getISBNs(asins []string) ([]ASINISBNPair, []string) {
 	})
 	c.SetRequestTimeout(30 * time.Second)
 
-	ASINISBNPairs := make([]ASINISBNPair, 0)
+	ASINISBNPairs := make([]DataTypes.ASINISBNPair, 0)
 	isbnRegex := regexp.MustCompile(`\d{3}-\d{10}`)
 	kindleASINs := make([]string, 0)
 	c.OnHTML("body", func(element *colly.HTMLElement) {
@@ -131,7 +95,7 @@ func getISBNs(asins []string) ([]ASINISBNPair, []string) {
 			return
 		}
 
-		ASINISBNPairs = append(ASINISBNPairs, ASINISBNPair{ASIN: asin, ISBN: strings.Replace(isbn, "-", "", 1)})
+		ASINISBNPairs = append(ASINISBNPairs, DataTypes.ASINISBNPair{ASIN: asin, ISBN: strings.Replace(isbn, "-", "", 1)})
 	})
 
 	c.OnError(func(response *colly.Response, err error) {
