@@ -30,6 +30,7 @@ func getUnknownASINsFromList(ASINs []string, ASINsChannel chan<- string) {
 			ASINsChannel <- ASIN
 		}
 	}
+	close(ASINsChannel)
 }
 
 func ScrapeBestsellers() {
@@ -45,29 +46,44 @@ func scrapeASINsFromAmazon() []string {
 }
 
 func scrapeISBNsFromAmazon(asins []string) {
-	proxies := Proxy.GetProxies()
-	wg := sync.WaitGroup{}
-	wg.Add(len(proxies))
-	fakeChrome := ChromeClient.GetChromeClient()
-
 	ASINsChannel := make(chan string, 100)
 
-	getUnknownASINsFromList(asins, ASINsChannel)
+	go getUnknownASINsFromList(asins, ASINsChannel)
 
 	ASINISBNPairsChannel := make(chan DataTypes.ASINISBNPair)
 	kindleASINsChannel := make(chan string)
 
+	insertWaitingGroup := sync.WaitGroup{}
+	insertWaitingGroup.Add(2)
+
+	go func() {
+		defer insertWaitingGroup.Done()
+		insertISBNs(ASINISBNPairsChannel)
+	}()
+	go func() {
+		defer insertWaitingGroup.Done()
+		insertASINsKindle(kindleASINsChannel)
+	}()
+
+	fakeChrome := ChromeClient.GetChromeClient()
+
+	proxies := Proxy.GetProxies()
+	scrapingWaitingGroup := sync.WaitGroup{}
+	scrapingWaitingGroup.Add(len(proxies))
+
 	for _, proxy := range proxies {
 		go func(proxy string) {
-			defer wg.Done()
+			defer scrapingWaitingGroup.Done()
 			getISBNsFromASINs(ASINsChannel, fakeChrome, proxy, ASINISBNPairsChannel, kindleASINsChannel)
 		}(proxy)
 	}
 
-	go insertISBNs(ASINISBNPairsChannel)
-	go insertASINsKindle(kindleASINsChannel)
+	scrapingWaitingGroup.Wait()
 
-	wg.Wait()
+	close(ASINISBNPairsChannel)
+	close(kindleASINsChannel)
+
+	insertWaitingGroup.Wait()
 }
 
 func insertASINsKindle(asinsKindle chan string) {
@@ -78,7 +94,7 @@ func insertASINsKindle(asinsKindle chan string) {
 	}
 
 	result := MongoDBInteractions.BulkWriteBestsellers(bulkOps)
-	fmt.Printf("(Kindle books) Upserted %d documents and modified %d documents.\n", result.UpsertedCount, result.ModifiedCount)
+	fmt.Printf("(Kindle books) Inserted %d, Upserted %d and modified %d documents.\n", result.InsertedCount, result.UpsertedCount, result.ModifiedCount)
 }
 
 func insertISBNs(ASINISBNPairs chan DataTypes.ASINISBNPair) {
@@ -89,7 +105,7 @@ func insertISBNs(ASINISBNPairs chan DataTypes.ASINISBNPair) {
 	}
 
 	result := MongoDBInteractions.BulkWriteBestsellers(bulkOps)
-	fmt.Printf("(Normal books) Upserted %d documents and modified %d documents.\n", result.UpsertedCount, result.ModifiedCount)
+	fmt.Printf("(Normal books) Inserted %d, Upserted %d and modified %d documents.\n", result.InsertedCount, result.UpsertedCount, result.ModifiedCount)
 }
 
 func getISBNsFromASINs(ASINsChannel <-chan string, fakeChrome *req.Client, proxy string, ASINISBNPairsChannel chan<- DataTypes.ASINISBNPair, kindleASINsChannel chan<- string) {
@@ -120,14 +136,12 @@ func getISBNsFromASINs(ASINsChannel <-chan string, fakeChrome *req.Client, proxy
 	c.OnHTML("body", func(element *colly.HTMLElement) {
 		isbn := isbnRegex.FindString(element.Text)
 		asin := element.Request.URL.Path[4:]
-		fmt.Println("Visited" + isbn)
 		if len(isbn) < 13 {
 			element.ForEach("span#productSubtitle", func(i int, element *colly.HTMLElement) {
 				if i > 0 {
 					panic("Found i>0")
 				}
 				if strings.Contains(element.Text, "Formato Kindle") {
-					fmt.Println("Found kindle book", asin)
 					kindleASINsChannel <- asin
 				}
 			})
@@ -151,9 +165,6 @@ func getISBNsFromASINs(ASINsChannel <-chan string, fakeChrome *req.Client, proxy
 	}
 
 	c.Wait()
-
-	close(ASINISBNPairsChannel)
-	close(kindleASINsChannel)
 }
 
 // span#productSubtitle   Formato Kindle
