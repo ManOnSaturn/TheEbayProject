@@ -1,19 +1,20 @@
 package AmazonScraping
 
 import (
+	"Scraper/ChromeClient"
 	"Scraper/DataTypes"
 	"Scraper/MongoDBInteractions"
+	"Scraper/Proxy"
 	"encoding/json"
 	"fmt"
 	"github.com/gocolly/colly/v2"
-	"github.com/gocolly/colly/v2/queue"
 	"github.com/imroc/req/v3"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -23,30 +24,56 @@ type Item struct {
 	ID string `json:"id"`
 }
 
-func getUnknownASINsFromList(ASINs []string) []string {
-	prunedASINs := make([]string, 0)
+func getUnknownASINsFromList(ASINs []string, ASINsChannel chan<- string) {
 	for _, ASIN := range ASINs {
 		if !MongoDBInteractions.IsASINStored(ASIN) {
-			prunedASINs = append(prunedASINs, ASIN)
+			ASINsChannel <- ASIN
 		}
 	}
-	return prunedASINs
 }
 
 func ScrapeBestsellers() {
-	links := getLinksFromBestsellerPages()
-	asins := extractASINsFromLinks(links)
-	prunedASINs := getUnknownASINsFromList(asins)
-	ASINISBNPairs, kindleASINs := getISBNsFromASINs(prunedASINs)
+	asins := scrapeASINsFromAmazon()
 
-	insertISBNs(ASINISBNPairs)
-	insertASINsKindle(kindleASINs)
+	scrapeISBNsFromAmazon(asins)
 }
 
-func insertASINsKindle(asinsKindle []string) {
+func scrapeASINsFromAmazon() []string {
+	links := getLinksFromBestsellerPages()
+	asins := extractASINsFromLinks(links)
+	return asins
+}
+
+func scrapeISBNsFromAmazon(asins []string) {
+	proxies := Proxy.GetProxies()
+	wg := sync.WaitGroup{}
+	wg.Add(len(proxies))
+	fakeChrome := ChromeClient.GetChromeClient()
+
+	ASINsChannel := make(chan string, 100)
+
+	getUnknownASINsFromList(asins, ASINsChannel)
+
+	ASINISBNPairsChannel := make(chan DataTypes.ASINISBNPair)
+	kindleASINsChannel := make(chan string)
+
+	for _, proxy := range proxies {
+		go func(proxy string) {
+			defer wg.Done()
+			getISBNsFromASINs(ASINsChannel, fakeChrome, proxy, ASINISBNPairsChannel, kindleASINsChannel)
+		}(proxy)
+	}
+
+	go insertISBNs(ASINISBNPairsChannel)
+	go insertASINsKindle(kindleASINsChannel)
+
+	wg.Wait()
+}
+
+func insertASINsKindle(asinsKindle chan string) {
 	var bulkOps []mongo.WriteModel
-	for _, asin := range asinsKindle {
-		model := MongoDBInteractions.BuildAmazonBestsellerIsKindleUpdateModel(asin)
+	for ASIN := range asinsKindle {
+		model := MongoDBInteractions.BuildAmazonBestsellerIsKindleUpdateModel(ASIN)
 		bulkOps = append(bulkOps, model)
 	}
 
@@ -54,9 +81,9 @@ func insertASINsKindle(asinsKindle []string) {
 	fmt.Printf("(Kindle books) Upserted %d documents and modified %d documents.\n", result.UpsertedCount, result.ModifiedCount)
 }
 
-func insertISBNs(ASINISBNPairs []DataTypes.ASINISBNPair) {
+func insertISBNs(ASINISBNPairs chan DataTypes.ASINISBNPair) {
 	var bulkOps []mongo.WriteModel
-	for _, pair := range ASINISBNPairs {
+	for pair := range ASINISBNPairs {
 		model := MongoDBInteractions.BuildAmazonBestsellerISBNUpdateModel(pair)
 		bulkOps = append(bulkOps, model)
 	}
@@ -65,23 +92,35 @@ func insertISBNs(ASINISBNPairs []DataTypes.ASINISBNPair) {
 	fmt.Printf("(Normal books) Upserted %d documents and modified %d documents.\n", result.UpsertedCount, result.ModifiedCount)
 }
 
-func getISBNsFromASINs(asins []string) ([]DataTypes.ASINISBNPair, []string) {
-	fakeChrome := req.DefaultClient().ImpersonateChrome()
-
+func getISBNsFromASINs(ASINsChannel <-chan string, fakeChrome *req.Client, proxy string, ASINISBNPairsChannel chan<- DataTypes.ASINISBNPair, kindleASINsChannel chan<- string) {
 	c := colly.NewCollector(colly.AllowURLRevisit(), colly.UserAgent(fakeChrome.Headers.Get("user-agent")))
 	c.SetClient(&http.Client{
 		Transport: fakeChrome.Transport,
 		Timeout:   30 * time.Second,
 	})
+
+	c.WithTransport(&http.Transport{
+		DisableKeepAlives: true,
+	})
+
+	err := c.Limit(&colly.LimitRule{DomainGlob: "*", Delay: 2 * time.Second})
+	if err != nil {
+		panic(err)
+	}
+
+	err = c.SetProxy(proxy)
+	if err != nil {
+		panic(err)
+	}
+
 	c.SetRequestTimeout(30 * time.Second)
 
-	ASINISBNPairs := make([]DataTypes.ASINISBNPair, 0)
 	isbnRegex := regexp.MustCompile(`\d{3}-\d{10}`)
-	kindleASINs := make([]string, 0)
+
 	c.OnHTML("body", func(element *colly.HTMLElement) {
-		fmt.Println("Visited")
 		isbn := isbnRegex.FindString(element.Text)
 		asin := element.Request.URL.Path[4:]
+		fmt.Println("Visited" + isbn)
 		if len(isbn) < 13 {
 			element.ForEach("span#productSubtitle", func(i int, element *colly.HTMLElement) {
 				if i > 0 {
@@ -89,13 +128,13 @@ func getISBNsFromASINs(asins []string) ([]DataTypes.ASINISBNPair, []string) {
 				}
 				if strings.Contains(element.Text, "Formato Kindle") {
 					fmt.Println("Found kindle book", asin)
-					kindleASINs = append(kindleASINs, asin)
+					kindleASINsChannel <- asin
 				}
 			})
 			return
 		}
-
-		ASINISBNPairs = append(ASINISBNPairs, DataTypes.ASINISBNPair{ASIN: asin, ISBN: strings.Replace(isbn, "-", "", 1)})
+		pair := DataTypes.ASINISBNPair{ASIN: asin, ISBN: strings.Replace(isbn, "-", "", 1)}
+		ASINISBNPairsChannel <- pair
 	})
 
 	c.OnError(func(response *colly.Response, err error) {
@@ -103,27 +142,18 @@ func getISBNsFromASINs(asins []string) ([]DataTypes.ASINISBNPair, []string) {
 		fmt.Println(err.Error())
 	})
 
-	q, _ := queue.New(6, &queue.InMemoryQueueStorage{MaxSize: len(asins)})
-	addAsinsToQ(asins, q)
-	err := q.Run(c) // Blocking
-	if err != nil {
-		panic(err)
+	for ASIN := range ASINsChannel {
+		URL := "https://www.amazon.it/dp/" + ASIN
+		err := c.Visit(URL)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 
 	c.Wait()
-	return ASINISBNPairs, kindleASINs
-}
 
-func addAsinsToQ(asinsFailed []string, q *queue.Queue) {
-	for _, asin := range asinsFailed {
-		err := q.AddURL("https://www.amazon.it/dp/" + asin)
-		if err != nil {
-			_, err := fmt.Fprintln(os.Stderr, "Error on adding URL:", err)
-			if err != nil {
-				panic(err)
-			}
-		}
-	}
+	close(ASINISBNPairsChannel)
+	close(kindleASINsChannel)
 }
 
 // span#productSubtitle   Formato Kindle
