@@ -322,3 +322,13 @@ func BuildMondadoriProductUpsertModel(entry DataTypes.MondadoriSitemapItem, last
 		SetUpsert(true)
 	return model
 }
+
+func UpsertMondadoriBooksAndProducts(models []mongo.WriteModel, models2 []mongo.WriteModel) {
+	startTime := time.Now()
+	fmt.Println("Upserting", len(models), "Mondadori books and products.")
+
+	UpsertMondadoriBooks(models)
+	UpsertMondadoriProducts(models2)
+
+	fmt.Println("Upserting took", time.Since(startTime).Seconds(), "seconds.")
+}

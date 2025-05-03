@@ -42,22 +42,21 @@ func FullScrape() {
 		wg.Wait()
 		close(booksChan)
 	}()
+
 	var models []mongo.WriteModel
 	var models2 []mongo.WriteModel
 	for book := range booksChan {
 		models = append(models, MongoDBInteractions.CreateUpsertModelFromMondadoriBook(*book))
 		models2 = append(models2, MongoDBInteractions.CreateUpsertModelFromMondadoriBookForProducts(*book))
 		if len(models) == 1000 {
-			MongoDBInteractions.UpsertMondadoriBooks(models)
+			MongoDBInteractions.UpsertMondadoriBooksAndProducts(models, models2)
 			models = make([]mongo.WriteModel, 0)
-			MongoDBInteractions.UpsertMondadoriProducts(models2)
 			models2 = make([]mongo.WriteModel, 0)
 		}
 	}
 
 	if len(models) > 0 {
-		MongoDBInteractions.UpsertMondadoriBooks(models)
-		MongoDBInteractions.UpsertMondadoriProducts(models2)
+		MongoDBInteractions.UpsertMondadoriBooksAndProducts(models, models2)
 	}
 	// In the future, we might want to check whether there are no new mondadori categories in the database, which we don't know of
 	//checkNoNewMondadoriCategory()
