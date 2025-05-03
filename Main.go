@@ -34,7 +34,19 @@ func main() {
 		reprice()
 	}
 
-	//FeltrinelliScraping.FullScrape()
+	if len(os.Args) > 1 && os.Args[1] == "--fullScrape" {
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			FeltrinelliScraping.FullScrape()
+		}()
+		go func() {
+			defer wg.Done()
+			MondadoriScraping.FullScrape()
+		}()
+		wg.Wait()
+	}
 
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")
 }
