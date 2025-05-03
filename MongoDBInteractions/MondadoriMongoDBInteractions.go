@@ -56,6 +56,7 @@ func RemoveAllUnseenProductsAndBooksMondadori(lastSeen time.Time) {
 
 	bulkOption := options.BulkWrite().SetOrdered(false)
 
+	// DELETING BOOKS MUST ALWAYS HAPPEN BEFORE DELETING PRODUCTS!!!
 	// Delete books with given URLs
 	_, err = mondadoriBooksCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
 	if err != nil {

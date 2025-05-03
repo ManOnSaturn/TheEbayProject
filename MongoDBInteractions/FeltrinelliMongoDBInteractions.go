@@ -197,6 +197,7 @@ func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
 
 	bulkOption := options.BulkWrite().SetOrdered(false)
 
+	// DELETING BOOKS MUST ALWAYS HAPPEN BEFORE DELETING PRODUCTS!!!
 	// Delete books with given URLs
 	_, err = feltrinelliBooksCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
 	if err != nil {
