@@ -13,7 +13,7 @@ import (
 )
 
 func RemoveAllUnseenProductsAndBooksMondadori(lastSeen time.Time) {
-	fmt.Println("Removing all unseen products")
+	fmt.Println("Removing all unseen Mondadori products.")
 	startTime := time.Now()
 	filter := bson.M{
 		"LastSeen": bson.M{
@@ -34,7 +34,6 @@ func RemoveAllUnseenProductsAndBooksMondadori(lastSeen time.Time) {
 	}(cursor, context.TODO())
 
 	deleteModels := make([]mongo.WriteModel, 0)
-	mondadoriBooksISBNs := make([]string, 0)
 	for cursor.Next(context.TODO()) {
 		var result DataTypes.MondadoriProduct
 		err := cursor.Decode(&result)
@@ -47,7 +46,6 @@ func RemoveAllUnseenProductsAndBooksMondadori(lastSeen time.Time) {
 		model := mongo.NewDeleteOneModel()
 		model.SetFilter(bson.M{"URL": result.URL})
 		deleteModels = append(deleteModels, model)
-		mondadoriBooksISBNs = append(mondadoriBooksISBNs, result.ISBN)
 	}
 
 	if len(deleteModels) == 0 {
@@ -64,7 +62,7 @@ func RemoveAllUnseenProductsAndBooksMondadori(lastSeen time.Time) {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
 		panic(err)
 	}
-	fmt.Println("Removed all unseen books.")
+	fmt.Println("Removed all unseen Mondadori books.")
 
 	// Delete products with given URLs
 	_, err = mondadoriProductsCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
@@ -72,34 +70,9 @@ func RemoveAllUnseenProductsAndBooksMondadori(lastSeen time.Time) {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
 		panic(err)
 	}
-	fmt.Println("Removed all unseen products.")
+	fmt.Println("Removed all unseen Mondadori products.")
 
-	// Change availability if book is published
-	var booksToUpdateModels []mongo.WriteModel
-	for _, ISBN := range mondadoriBooksISBNs {
-		documents, _ := ebayDataCollection.CountDocuments(context.TODO(), bson.M{"ISBN": ISBN})
-		if documents > 0 {
-			model := mongo.NewUpdateOneModel()
-			model.SetFilter(bson.M{"ISBN": ISBN})
-			model.SetUpsert(true)
-			model.SetUpdate(bson.M{"$set": bson.M{"ISBN": ISBN}})
-			booksToUpdateModels = append(booksToUpdateModels, model)
-		}
-	}
-
-	fmt.Printf("Adding %d ISBNs to bookToUpdate collection.\n", len(booksToUpdateModels))
-
-	// TODO reason about whether this is actually needed, or needs to be checked during repricing, or both
-	if len(booksToUpdateModels) > 0 {
-		fmt.Println("Storing books which disappeared as books to update")
-		_, err = booksToUpdateCollection.BulkWrite(context.TODO(), booksToUpdateModels)
-		if err != nil {
-			_, err = fmt.Fprintln(os.Stderr, "Error occurred during bulk write operation:", err)
-			return
-		}
-	}
-
-	fmt.Println("Removed all unseen products, books, and marked books to update in ", time.Since(startTime).Seconds(), "seconds.")
+	fmt.Println("Removed all unseen Mondadori products and books ", time.Since(startTime).Seconds(), "seconds.")
 }
 
 func BulkWriteMondadoriProducts(models []mongo.WriteModel) {

@@ -45,7 +45,6 @@ func scrapeXMLs() {
 					MongoDBInteractions.BulkWriteMondadoriProducts(models)
 					models = make([]mongo.WriteModel, 0)
 					fmt.Println("Processed 10000 XML entries into the DB.")
-					fmt.Println("Working URLSet index", i, "out of", numOfSitemaps)
 				}
 
 				mutex.Unlock()
