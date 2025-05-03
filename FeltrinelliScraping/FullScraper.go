@@ -28,7 +28,7 @@ func FullScrape() {
 	scrapeAllXMLs()
 
 	urlsChan := make(chan string)
-	go MongoDBInteractions.GetNewProductsURLsIntoChannel(urlsChan)
+	go MongoDBInteractions.GetAllBookProductsAndNewProductsURLsIntoChannel(urlsChan)
 	//go testSendingProducts(urlsChan)
 
 	fullBooksChan := make(chan *DataTypes.FeltrinelliScrapedBook)

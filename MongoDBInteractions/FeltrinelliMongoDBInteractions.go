@@ -294,16 +294,13 @@ func BuildFeltrinelliProductUpsertModel(entry DataTypes.URL, lastSeen time.Time)
 	return model
 }
 
-func GetNewProductsURLsIntoChannel(urlsChan chan<- string) {
-	// Filter for documents where the field 'IsBook' does not exist.
-	filter := bson.M{"IsBook": bson.M{"$exists": false}}
-	// The following would be useful to try and fix some books which have been mistakenly marked as non-books.
-	//filter := bson.M{
-	//	"$or": []bson.M{
-	//		{"IsBook": false},
-	//		{"IsBook": bson.M{"$exists": false}},
-	//	},
-	//}
+func GetAllBookProductsAndNewProductsURLsIntoChannel(urlsChan chan<- string) {
+	filter := bson.M{
+		"$or": []bson.M{
+			{"IsBook": true},
+			{"IsBook": bson.M{"$exists": false}},
+		},
+	}
 
 	documentsCount, _ := feltrinelliProductsCollection.CountDocuments(context.TODO(), filter)
 	fmt.Println("Number of new products: ", documentsCount)
