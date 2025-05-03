@@ -331,3 +331,20 @@ func GetAllMondadoriBooksOnEbay() map[string]DataTypes.EbayDataWithMondadoriBook
 	}
 	return outputMap
 }
+
+func BuildMondadoriProductUpsertModel(entry DataTypes.MondadoriSitemapItem, lastSeen time.Time) *mongo.UpdateOneModel {
+	filter := bson.M{"URL": entry.Loc}
+
+	update := bson.M{
+		"$set": bson.M{
+			"URL":      entry.Loc,
+			"LastSeen": lastSeen,
+		},
+	}
+
+	model := mongo.NewUpdateOneModel().
+		SetFilter(filter).
+		SetUpdate(update).
+		SetUpsert(true)
+	return model
+}

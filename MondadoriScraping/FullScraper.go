@@ -18,7 +18,7 @@ import (
 )
 
 func FullScrape() {
-	//scrapeXMLs()
+	scrapeXMLs()
 
 	urlsChan := make(chan string, 100)
 	booksChan := make(chan *DataTypes.MondadoriBook, 1000)

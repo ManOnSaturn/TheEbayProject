@@ -3,63 +3,59 @@ package MondadoriScraping
 import (
 	"Scraper/DataTypes"
 	"Scraper/MongoDBInteractions"
+	"Scraper/Proxy"
 	"bytes"
 	"compress/gzip"
 	"encoding/xml"
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"io"
+	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 )
 
 func scrapeXMLs() {
-	baseURL := "https://www.mondadoristore.it/sitemap-libri-"
 	numOfSitemaps := fetchNumberOfSitemaps()
 	lastSeen := time.Now()
 	var models []mongo.WriteModel
+	mutex := sync.Mutex{}
+	wg := sync.WaitGroup{}
+	wg.Add(numOfSitemaps)
+	proxies := Proxy.GetProxies()
 
 	for i := 1; i <= numOfSitemaps; i++ {
-		// Construct the URL
-		url := baseURL + strconv.Itoa(i) + ".xml.gz"
-
-		// Download and parse the XML file
-		mondadoriSitemapItemFile, err := downloadAndUncompressGzToXML(url)
-		if err != nil {
-			fmt.Printf("Error: %v\n", err)
-			return
-		}
-
-		for _, entry := range mondadoriSitemapItemFile.MondadoriSitemapItem {
-			filter := bson.M{"URL": entry.Loc}
-
-			// Create the update document
-			update := bson.M{
-				"$set": bson.M{
-					"URL":      entry.Loc,
-					"LastSeen": lastSeen,
-				},
+		go func(index int) {
+			mondadoriSitemapItemFile, err := downloadAndUncompressGzToXML(index, proxies[index%len(proxies)])
+			if err != nil {
+				log.Fatalf("Error: %v\n", err)
 			}
 
-			// Create an UpdateOneModel with upsert option
-			model := mongo.NewUpdateOneModel().
-				SetFilter(filter).
-				SetUpdate(update).
-				SetUpsert(true)
+			for _, entry := range mondadoriSitemapItemFile.MondadoriSitemapItem {
+				model := MongoDBInteractions.BuildMondadoriProductUpsertModel(entry, lastSeen)
 
-			models = append(models, model)
+				mutex.Lock()
+				models = append(models, model)
 
-			if len(models) >= 10000 {
-				MongoDBInteractions.BulkWriteMondadoriProducts(models)
-				models = make([]mongo.WriteModel, 0)
-				fmt.Println("Processed 10000 XML entries into the DB.")
-				fmt.Println("Working URLSet index", i, "out of", numOfSitemaps)
+				if len(models) >= 10000 {
+					MongoDBInteractions.BulkWriteMondadoriProducts(models)
+					models = make([]mongo.WriteModel, 0)
+					fmt.Println("Processed 10000 XML entries into the DB.")
+					fmt.Println("Working URLSet index", i, "out of", numOfSitemaps)
+				}
+
+				mutex.Unlock()
+
+				wg.Done()
 			}
-		}
+		}(i)
 	}
+
+	wg.Wait()
 
 	// Execute remaining models in bulk
 	if len(models) > 0 {
@@ -72,7 +68,7 @@ func scrapeXMLs() {
 
 func fetchNumberOfSitemaps() int {
 	// Fetch the XML content from the URL
-	err, resp := getRequestWithHeader("https://www.mondadoristore.it/sitemap.xml")
+	err, resp := getRequestWithHeader("https://www.mondadoristore.it/sitemap.xml", nil)
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
@@ -118,8 +114,9 @@ func fetchNumberOfSitemaps() int {
 	return maxNumber
 }
 
-func downloadAndUncompressGzToXML(url string) (*DataTypes.MondadoriSitemapItemFile, error) {
-	err, resp := getRequestWithHeader(url)
+func downloadAndUncompressGzToXML(index int, proxy string) (*DataTypes.MondadoriSitemapItemFile, error) {
+	URL := "https://www.mondadoristore.it/sitemap-libri-" + strconv.Itoa(index) + ".xml.gz"
+	err, resp := getRequestWithHeader(URL, &proxy)
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
@@ -162,9 +159,9 @@ func downloadAndUncompressGzToXML(url string) (*DataTypes.MondadoriSitemapItemFi
 	return &mondadoriSitemapItemFile, nil
 }
 
-func getRequestWithHeader(url string) (error, *http.Response) {
+func getRequestWithHeader(URL string, proxy *string) (error, *http.Response) {
 	// Create a new HTTP request
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", URL, nil)
 	if err != nil {
 		return fmt.Errorf("error creating request: %v", err), nil
 	}
@@ -172,8 +169,25 @@ func getRequestWithHeader(url string) (error, *http.Response) {
 	// Set a custom User-Agent
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36")
 
-	// Send the request
+	// Create HTTP client with proxy if provided
 	client := &http.Client{}
+
+	if proxy != nil && *proxy != "" {
+		proxyUrl, err := url.Parse(*proxy)
+		if err != nil {
+			return fmt.Errorf("error parsing proxy URL: %v", err), nil
+		}
+
+		transport := &http.Transport{
+			Proxy: http.ProxyURL(proxyUrl),
+		}
+
+		client = &http.Client{
+			Transport: transport,
+		}
+	}
+
+	// Send the request
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("error making request: %v", err), resp
