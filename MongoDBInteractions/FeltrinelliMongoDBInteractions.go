@@ -75,7 +75,7 @@ func SetProductIsBook(URL string, isBook bool) {
 			"IsBook": isBook,
 		},
 	}
-	_, err := FeltrinelliProductsCollection.UpdateOne(context.TODO(), filter, update)
+	_, err := feltrinelliProductsCollection.UpdateOne(context.TODO(), filter, update)
 	if err != nil {
 		log.Fatalf("Failed to set product is book: %v", err)
 	}
@@ -115,7 +115,7 @@ func FormatNumberIntoString(number json.Number) (string, error) {
 }
 
 func BulkWriteFeltrinelliProducts(models []mongo.WriteModel) {
-	_, err := FeltrinelliProductsCollection.BulkWrite(context.TODO(), models)
+	_, err := feltrinelliProductsCollection.BulkWrite(context.TODO(), models)
 	if err != nil {
 		log.Fatalf("Failed to execute bulk write: %v", err)
 	}
@@ -162,7 +162,7 @@ func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
 		},
 	}
 
-	cursor, err := FeltrinelliProductsCollection.Find(context.TODO(), filter)
+	cursor, err := feltrinelliProductsCollection.Find(context.TODO(), filter)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
 	bulkOption := options.BulkWrite().SetOrdered(false)
 
 	// Delete products with given URLs
-	_, err = FeltrinelliProductsCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
+	_, err = feltrinelliProductsCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
 		panic(err)
@@ -320,4 +320,71 @@ func BuildFeltrinelliProductUpsertModel(entry DataTypes.URL, lastSeen time.Time)
 		SetUpdate(update).
 		SetUpsert(true)
 	return model
+}
+
+func GetNewProductsURLsIntoChannel(urlsChan chan<- string) {
+	// Filter for documents where the field 'IsBook' does not exist.
+	filter := bson.M{"IsBook": bson.M{"$exists": false}}
+	// The following would be useful to try and fix some books which have been mistakenly marked as non-books.
+	//filter := bson.M{
+	//	"$or": []bson.M{
+	//		{"IsBook": false},
+	//		{"IsBook": bson.M{"$exists": false}},
+	//	},
+	//}
+
+	documentsCount, _ := feltrinelliProductsCollection.CountDocuments(context.TODO(), filter)
+	fmt.Println("Number of new products: ", documentsCount)
+
+	SendURLsToChannelFromCursor(urlsChan, filter)
+}
+
+func SendURLsToChannelFromCursor(urlsChan chan<- string, filter bson.M) {
+	opts := options.Find().SetBatchSize(1000)
+	cursor, err := feltrinelliProductsCollection.Find(context.TODO(), filter, opts)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(cursor *mongo.Cursor) {
+		err := cursor.Close(context.TODO())
+		if err != nil {
+			panic(err)
+		}
+	}(cursor)
+
+	startTime := time.Now()
+	count := 0
+	// Iterate through the cursor and send documents to the channel
+	for cursor.Next(context.TODO()) {
+		var document bson.M
+		if err := cursor.Decode(&document); err != nil {
+			// Log the error but continue processing other documents
+			log.Printf("Error decoding document: %v\n", err)
+			continue
+		}
+
+		// Safely extract URL and EAN from the document
+		URL, okURL := document["URL"].(string)
+		ean := URL[len(URL)-13:]
+
+		if !okURL {
+			log.Fatalf("Missing or invalid URL in document: %v\n", document)
+		}
+		if !strings.HasPrefix(ean, "978") && !strings.HasPrefix(ean, "979") {
+			SetProductIsBook(URL, false)
+			continue
+		}
+		urlsChan <- URL
+		count++
+		if count%100 == 0 {
+			newNow := time.Now()
+			fmt.Println(count, "Feltrinelli products processed. 100 done in", newNow.Sub(startTime).Seconds())
+			startTime = newNow
+		}
+	}
+
+	if err := cursor.Err(); err != nil {
+		log.Fatal(err)
+	}
+	close(urlsChan) // Close the channel when done
 }

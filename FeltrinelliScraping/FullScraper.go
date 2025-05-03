@@ -5,14 +5,11 @@ import (
 	"Scraper/DataTypes"
 	"Scraper/MongoDBInteractions"
 	"Scraper/Proxy"
-	"context"
 	"encoding/xml"
 	"fmt"
 	"github.com/gocolly/colly/v2"
 	"github.com/imroc/req/v3"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"io"
 	"log"
 	"net/http"
@@ -31,7 +28,7 @@ func FullScrape() {
 	scrapeAllXMLs()
 
 	urlsChan := make(chan string)
-	go getNewProducts(urlsChan)
+	go MongoDBInteractions.GetNewProductsURLsIntoChannel(urlsChan)
 	//go testSendingProducts(urlsChan)
 
 	fullBooksChan := make(chan *DataTypes.FeltrinelliScrapedBook)
@@ -234,69 +231,6 @@ func getRequestWithHeader(url string) (error, *http.Response) {
 	}
 
 	return err, resp
-}
-
-func getNewProducts(urlsChan chan string) {
-	// Filter for documents where the field 'IsBook' does not exist
-	//filter := bson.M{"IsBook": bson.M{"$exists": false}}
-	filter := bson.M{
-		"$or": []bson.M{
-			{"IsBook": false},
-			{"IsBook": bson.M{"$exists": false}},
-		},
-	}
-	todoContext := context.TODO()
-
-	documentsCount, _ := MongoDBInteractions.FeltrinelliProductsCollection.CountDocuments(todoContext, filter)
-	fmt.Println("Number of new products: ", documentsCount)
-
-	opts := options.Find().SetBatchSize(1000)
-	cursor, err := MongoDBInteractions.FeltrinelliProductsCollection.Find(todoContext, filter, opts)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func(cursor *mongo.Cursor, ctx context.Context) {
-		err := cursor.Close(ctx)
-		if err != nil {
-			panic(err)
-		}
-	}(cursor, todoContext)
-
-	startTime := time.Now()
-	count := 0
-	// Iterate through the cursor and send documents to the channel
-	for cursor.Next(todoContext) {
-		var document bson.M
-		if err := cursor.Decode(&document); err != nil {
-			// Log the error but continue processing other documents
-			log.Printf("Error decoding document: %v\n", err)
-			continue
-		}
-
-		// Safely extract URL and EAN from the document
-		URL, okURL := document["URL"].(string)
-		ean := URL[len(URL)-13:]
-
-		if !okURL {
-			log.Fatalf("Missing or invalid URL in document: %v\n", document)
-		}
-		if !strings.HasPrefix(ean, "978") && !strings.HasPrefix(ean, "979") {
-			MongoDBInteractions.SetProductIsBook(URL, false)
-			continue
-		}
-		urlsChan <- URL
-		count++
-		if count%100 == 0 {
-			newNow := time.Now()
-			fmt.Println(count, "products processed. 100 done in", newNow.Sub(startTime).Seconds())
-			startTime = newNow
-		}
-	}
-
-	if err := cursor.Err(); err != nil {
-		log.Fatal(err)
-	}
-	close(urlsChan) // Close the channel when done
 }
 
 func cleanDescription(input string) string {

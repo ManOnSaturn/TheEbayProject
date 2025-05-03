@@ -22,7 +22,7 @@ func DisconnectFromMongo() {
 }
 
 var client *mongo.Client
-var FeltrinelliProductsCollection *mongo.Collection
+var feltrinelliProductsCollection *mongo.Collection
 var mondadoriProductsCollection *mongo.Collection
 var feltrinelliBooksCollection *mongo.Collection
 var mondadoriBooksCollection *mongo.Collection
@@ -52,7 +52,7 @@ func ConnectToMongo() {
 		panic(err)
 	}
 
-	FeltrinelliProductsCollection = database.Collection("FeltrinelliProducts")
+	feltrinelliProductsCollection = database.Collection("FeltrinelliProducts")
 	mondadoriProductsCollection = database.Collection("MondadoriProducts")
 	feltrinelliBooksCollection = database.Collection("FeltrinelliBooks")
 	mondadoriBooksCollection = database.Collection("MondadoriBooks")
