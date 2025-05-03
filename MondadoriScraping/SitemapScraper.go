@@ -49,9 +49,9 @@ func scrapeXMLs() {
 				}
 
 				mutex.Unlock()
-
-				wg.Done()
 			}
+
+			wg.Done()
 		}(i)
 	}
 
