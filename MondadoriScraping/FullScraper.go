@@ -59,8 +59,7 @@ func FullScrape() {
 		MongoDBInteractions.UpsertMondadoriBooks(models)
 		MongoDBInteractions.UpsertMondadoriProducts(models2)
 	}
-	// Start python repricer if during scrape XMLs some books have disappeared.
-	// Handle disappeared books during scrapeBooks as well.
+	// In the future, we might want to check whether there are no new mondadori categories in the database, which we don't know of
 	//checkNoNewMondadoriCategory()
 }
 
