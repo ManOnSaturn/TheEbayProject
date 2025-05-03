@@ -199,6 +199,7 @@ func BuildEbayBook(isbn string) *DataTypes.EbayBook {
 	mondadoriBook, _ := MongoDBInteractions.GetMondadoriBook(isbn)
 	feltrinelliBook, _ := MongoDBInteractions.GetFeltrinelliBook(isbn)
 	if mondadoriBook == nil {
+		// If this is occurring, it might be because the book has been discovered absent during the sitemap scrape.
 		_, err := fmt.Fprintf(os.Stderr, "Mondadori book(%s) disappeared from database!", isbn)
 		if err != nil {
 			panic(err)
