@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -282,4 +283,41 @@ func DeleteFeltrinelliBook(URL string) {
 	if result != nil && result.DeletedCount < 1 {
 		panic("Feltrinelli book was not deleted. URL:" + URL)
 	}
+}
+
+func SetBookIsRedirected(URL string) {
+	filter := bson.M{"URL": URL}
+	update := bson.M{"$set": bson.M{"Availability": "Redirected"}}
+	_, err := feltrinelliBooksCollection.UpdateOne(context.TODO(), filter, update)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func getEAN(s string) string {
+	lastSlashIndex := strings.LastIndex(s, "/")
+
+	if lastSlashIndex != -1 {
+		return s[lastSlashIndex+1:]
+	} else {
+		panic("No '/' found in the string.")
+	}
+}
+
+func BuildFeltrinelliProductUpsertModel(entry DataTypes.URL, lastSeen time.Time) *mongo.UpdateOneModel {
+	filter := bson.M{"URL": entry.Loc}
+
+	update := bson.M{
+		"$set": bson.M{
+			"URL":      entry.Loc,
+			"EAN":      getEAN(entry.Loc),
+			"LastSeen": lastSeen,
+		},
+	}
+
+	model := mongo.NewUpdateOneModel().
+		SetFilter(filter).
+		SetUpdate(update).
+		SetUpsert(true)
+	return model
 }

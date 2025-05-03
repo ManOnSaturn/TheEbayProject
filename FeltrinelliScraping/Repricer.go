@@ -41,7 +41,7 @@ func scrapeRepricerBooks(ebayDataWithFeltrinelliBooks map[string]DataTypes.EbayD
 		Timeout:   30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			originalReqURL := via[len(via)-1].URL.String()
-			MongoDBInteractions.SetProductIsBook(originalReqURL, false)
+			MongoDBInteractions.SetBookIsRedirected(originalReqURL)
 			return fmt.Errorf("redirects are not allowed")
 		},
 	})

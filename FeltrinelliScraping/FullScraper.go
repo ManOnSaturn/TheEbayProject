@@ -27,7 +27,7 @@ import (
 func FullScrape() {
 	startTime := time.Now()
 
-	//scrapeAllXMLs()
+	scrapeAllXMLs()
 
 	urlsChan := make(chan string)
 	go getNewProducts(urlsChan)
@@ -89,16 +89,6 @@ func downloadAndParseXML(url string) (*DataTypes.UrlSet, error) {
 	return &urlSet, nil
 }
 
-func getEAN(s string) string {
-	lastSlashIndex := strings.LastIndex(s, "/")
-
-	if lastSlashIndex != -1 {
-		return s[lastSlashIndex+1:]
-	} else {
-		panic("No '/' found in the string.")
-	}
-}
-
 func scrapeAllXMLs() {
 	baseURL := "https://www.lafeltrinelli.it/sitemap_itbook_"
 	urlSets := make([]DataTypes.UrlSet, 0)
@@ -125,22 +115,7 @@ func scrapeAllXMLs() {
 	startTime = time.Now() // This takes about 236 seconds
 	for urlSetsIndex, urlSet := range urlSets {
 		for _, entry := range urlSet.URLs {
-			filter := bson.M{"URL": entry.Loc}
-
-			// Create the update document
-			update := bson.M{
-				"$set": bson.M{
-					"URL":      entry.Loc,
-					"EAN":      getEAN(entry.Loc),
-					"LastSeen": lastSeen,
-				},
-			}
-
-			// Create an UpdateOneModel with upsert option
-			model := mongo.NewUpdateOneModel().
-				SetFilter(filter).
-				SetUpdate(update).
-				SetUpsert(true)
+			model := MongoDBInteractions.BuildFeltrinelliProductUpsertModel(entry, lastSeen)
 
 			models = append(models, model)
 
@@ -316,7 +291,7 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *DataTypes.Fel
 		Timeout:   30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			originalReqURL := via[len(via)-1].URL.String()
-			MongoDBInteractions.SetProductIsBook(originalReqURL, false)
+			MongoDBInteractions.SetBookIsRedirected(originalReqURL)
 			return fmt.Errorf("redirects are not allowed")
 		},
 	})
