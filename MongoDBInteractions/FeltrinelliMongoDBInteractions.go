@@ -154,7 +154,7 @@ func InsertFeltrinelliScrapedBook(feltrinelliScrapedBook *DataTypes.FeltrinelliS
 }
 
 func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
-	fmt.Println("Removing all unseen products")
+	fmt.Println("Removing all unseen Feltrinelli products.")
 	startTime := time.Now()
 	filter := bson.M{
 		"LastSeen": bson.M{

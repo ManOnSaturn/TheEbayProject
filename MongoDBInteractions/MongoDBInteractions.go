@@ -23,9 +23,9 @@ func DisconnectFromMongo() {
 
 var client *mongo.Client
 var FeltrinelliProductsCollection *mongo.Collection
-var MondadoriProductsCollection *mongo.Collection
+var mondadoriProductsCollection *mongo.Collection
 var feltrinelliBooksCollection *mongo.Collection
-var MondadoriBooksCollection *mongo.Collection
+var mondadoriBooksCollection *mongo.Collection
 var booksToUpdateCollection *mongo.Collection
 var bestsellersAmazonCollection *mongo.Collection
 var ebayDataCollection *mongo.Collection
@@ -53,9 +53,9 @@ func ConnectToMongo() {
 	}
 
 	FeltrinelliProductsCollection = database.Collection("FeltrinelliProducts")
-	MondadoriProductsCollection = database.Collection("MondadoriProducts")
+	mondadoriProductsCollection = database.Collection("MondadoriProducts")
 	feltrinelliBooksCollection = database.Collection("FeltrinelliBooks")
-	MondadoriBooksCollection = database.Collection("MondadoriBooks")
+	mondadoriBooksCollection = database.Collection("MondadoriBooks")
 	booksToUpdateCollection = database.Collection("BooksToUpdate")
 	bestsellersAmazonCollection = database.Collection("BestsellersAmazon")
 	ebayDataCollection = database.Collection("EbayData")

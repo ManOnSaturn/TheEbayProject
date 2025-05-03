@@ -21,7 +21,7 @@ func RemoveAllUnseenProductsAndBooksMondadori(lastSeen time.Time) {
 		},
 	}
 
-	cursor, err := MondadoriProductsCollection.Find(context.TODO(), filter)
+	cursor, err := mondadoriProductsCollection.Find(context.TODO(), filter)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func RemoveAllUnseenProductsAndBooksMondadori(lastSeen time.Time) {
 	bulkOption := options.BulkWrite().SetOrdered(false)
 
 	// Delete books with given URLs
-	_, err = MondadoriBooksCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
+	_, err = mondadoriBooksCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
 		panic(err)
@@ -67,7 +67,7 @@ func RemoveAllUnseenProductsAndBooksMondadori(lastSeen time.Time) {
 	fmt.Println("Removed all unseen books.")
 
 	// Delete products with given URLs
-	_, err = MondadoriProductsCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
+	_, err = mondadoriProductsCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
 		panic(err)
@@ -104,7 +104,7 @@ func RemoveAllUnseenProductsAndBooksMondadori(lastSeen time.Time) {
 
 func BulkWriteMondadoriProducts(models []mongo.WriteModel) {
 	bulkOptions := options.BulkWrite().SetOrdered(false)
-	_, err := MondadoriProductsCollection.BulkWrite(context.TODO(), models, bulkOptions)
+	_, err := mondadoriProductsCollection.BulkWrite(context.TODO(), models, bulkOptions)
 	if err != nil {
 		log.Fatalf("Failed to execute bulk write: %v", err)
 	}
@@ -139,7 +139,7 @@ func CreateUpsertModelFromMondadoriBook(book DataTypes.MondadoriBook) *mongo.Upd
 
 func UpsertMondadoriBooks(models []mongo.WriteModel) {
 	bulkOptions := options.BulkWrite().SetOrdered(false)
-	_, err := MondadoriBooksCollection.BulkWrite(context.TODO(), models, bulkOptions)
+	_, err := mondadoriBooksCollection.BulkWrite(context.TODO(), models, bulkOptions)
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "Error occurred while upserting book documents in mondadoriBooksCollection", err)
 		if err != nil {
@@ -150,9 +150,9 @@ func UpsertMondadoriBooks(models []mongo.WriteModel) {
 
 func UpsertMondadoriProducts(models []mongo.WriteModel) {
 	bulkOptions := options.BulkWrite().SetOrdered(false)
-	_, err := MondadoriProductsCollection.BulkWrite(context.TODO(), models, bulkOptions)
+	_, err := mondadoriProductsCollection.BulkWrite(context.TODO(), models, bulkOptions)
 	if err != nil {
-		_, err := fmt.Fprintln(os.Stderr, "Error occurred while upserting in MondadoriProductsCollection", err)
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred while upserting in mondadoriProductsCollection", err)
 		if err != nil {
 			panic(err)
 		}
@@ -176,7 +176,7 @@ func CreateUpsertModelFromMondadoriBookForProducts(book DataTypes.MondadoriBook)
 
 func GetAllMondadoriURLs(urlsChan chan<- string) {
 	opts := options.Find().SetBatchSize(1000)
-	cursor, err := MondadoriProductsCollection.Find(context.TODO(), bson.M{}, opts)
+	cursor, err := mondadoriProductsCollection.Find(context.TODO(), bson.M{}, opts)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -272,7 +272,7 @@ func GetAllMondadoriURLsOnEbay(urlsChan chan<- string) {
 func GetMondadoriBook(isbn string) (*DataTypes.MondadoriBook, error) {
 	filter := bson.M{"ISBN": isbn}
 	var result DataTypes.MondadoriBook
-	err := MondadoriBooksCollection.FindOne(context.TODO(), filter).Decode(&result)
+	err := mondadoriBooksCollection.FindOne(context.TODO(), filter).Decode(&result)
 	if err != nil {
 		return nil, err
 	}
