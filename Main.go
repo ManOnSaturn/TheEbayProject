@@ -34,18 +34,11 @@ func main() {
 		reprice()
 	}
 
-	if len(os.Args) > 1 && os.Args[1] == "--fullScrape" {
-		wg := sync.WaitGroup{}
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			FeltrinelliScraping.FullScrape()
-		}()
-		go func() {
-			defer wg.Done()
-			MondadoriScraping.FullScrape()
-		}()
-		wg.Wait()
+	if len(os.Args) > 1 && os.Args[1] == "--fullScrapeMondadori" {
+		MondadoriScraping.FullScrape()
+	}
+	if len(os.Args) > 1 && os.Args[1] == "--fullScrapeFeltrinelli" {
+		FeltrinelliScraping.FullScrape()
 	}
 
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")
