@@ -16,6 +16,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -56,8 +57,22 @@ func FullScrape() {
 	fmt.Println("Finished Feltrinelli full scraping in ", time.Since(startTime).Seconds(), "seconds.")
 }
 
-func downloadAndParseXML(url string) (*DataTypes.UrlSet, error) {
-	resp, err := http.Get(url)
+func downloadAndParseXML(index int, proxy string) (*DataTypes.UrlSet, error) {
+	proxyURL, err := url.Parse(proxy)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	transport := &http.Transport{
+		Proxy: http.ProxyURL(proxyURL),
+	}
+
+	client := &http.Client{
+		Transport: transport,
+	}
+
+	fullURL := "https://www.lafeltrinelli.it/sitemap_itbook_" + strconv.Itoa(index) + ".xml"
+	resp, err := client.Get(fullURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download: %v", err)
 	}
@@ -70,7 +85,7 @@ func downloadAndParseXML(url string) (*DataTypes.UrlSet, error) {
 
 	// Check if the response status is OK
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to download: %s (status code: %d)", url, resp.StatusCode)
+		return nil, fmt.Errorf("failed to download: %s (status code: %d)", fullURL, resp.StatusCode)
 	}
 
 	// Read the response body
@@ -85,27 +100,36 @@ func downloadAndParseXML(url string) (*DataTypes.UrlSet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse XML: %v", err)
 	}
-	fmt.Println("Successfully parsed", url)
+	fmt.Println("Successfully parsed", fullURL)
 	return &urlSet, nil
 }
 
 func scrapeAllXMLs() {
-	baseURL := "https://www.lafeltrinelli.it/sitemap_itbook_"
 	urlSets := make([]DataTypes.UrlSet, 0)
 
-	startTime := time.Now() // This took about 103 seconds
-	for i := 1; i <= fetchNumberOfSitemaps(); i++ {
-		// Construct the URL
-		url := baseURL + strconv.Itoa(i) + ".xml"
+	startTime := time.Now()
 
-		// Download and parse the XML file
-		urlSet, err := downloadAndParseXML(url)
-		if err != nil {
-			fmt.Printf("Error: %v\n", err)
-			break
-		}
-		urlSets = append(urlSets, *urlSet)
+	proxies := Proxy.GetProxies()
+	wg := sync.WaitGroup{}
+	wg.Add(len(proxies))
+	mutex := sync.Mutex{}
+
+	for i := 1; i <= fetchNumberOfSitemaps(); i++ {
+		go func(index int) {
+			urlSet, err := downloadAndParseXML(index, proxies[index%len(proxies)])
+			if err != nil {
+				log.Fatalf("Error: %v\n", err)
+			}
+
+			mutex.Lock()
+			urlSets = append(urlSets, *urlSet)
+			mutex.Unlock()
+
+			wg.Done()
+		}(i)
 	}
+
+	wg.Wait()
 	fmt.Printf("Finished getting all feltrinelli book's URLs from sitemaps in %g\n", time.Since(startTime).Seconds())
 
 	var models []mongo.WriteModel
@@ -249,17 +273,17 @@ func getNewProducts(urlsChan chan string) {
 		}
 
 		// Safely extract URL and EAN from the document
-		url, okURL := document["URL"].(string)
-		ean := url[len(url)-13:]
+		URL, okURL := document["URL"].(string)
+		ean := URL[len(URL)-13:]
 
 		if !okURL {
 			log.Fatalf("Missing or invalid URL in document: %v\n", document)
 		}
 		if !strings.HasPrefix(ean, "978") && !strings.HasPrefix(ean, "979") {
-			MongoDBInteractions.SetProductIsBook(url, false)
+			MongoDBInteractions.SetProductIsBook(URL, false)
 			continue
 		}
-		urlsChan <- url
+		urlsChan <- URL
 		count++
 		if count%100 == 0 {
 			newNow := time.Now()
@@ -418,8 +442,8 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *DataTypes.Fel
 		}
 	})
 
-	for url := range urlsChan {
-		err := c.Visit(url)
+	for URL := range urlsChan {
+		err := c.Visit(URL)
 		if err != nil && !strings.Contains(err.Error(), "redirects are not allowed") {
 			_, errFmt := fmt.Fprintf(os.Stderr, "Failed to visit:%s\n", err)
 			if errFmt != nil {
