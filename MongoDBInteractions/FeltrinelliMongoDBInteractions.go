@@ -175,7 +175,6 @@ func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
 	}(cursor, context.TODO())
 
 	deleteModels := make([]mongo.WriteModel, 0)
-	feltrinelliBooksISBNs := make([]string, 0)
 	for cursor.Next(context.TODO()) {
 		var result DataTypes.FeltrinelliProduct
 		err := cursor.Decode(&result)
@@ -188,11 +187,6 @@ func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
 		model := mongo.NewDeleteOneModel()
 		model.SetFilter(bson.M{"URL": result.URL})
 		deleteModels = append(deleteModels, model)
-		var feltrinelliBook DataTypes.FeltrinelliBook
-		findOneError := feltrinelliBooksCollection.FindOne(context.TODO(), bson.M{"URL": result.URL}).Decode(&feltrinelliBook)
-		if findOneError == nil {
-			feltrinelliBooksISBNs = append(feltrinelliBooksISBNs, feltrinelliBook.ISBN)
-		}
 	}
 
 	if len(deleteModels) == 0 {
@@ -203,13 +197,6 @@ func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
 
 	bulkOption := options.BulkWrite().SetOrdered(false)
 
-	// Delete products with given URLs
-	_, err = feltrinelliProductsCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
-	if err != nil {
-		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
-		panic(err)
-	}
-
 	// Delete books with given URLs
 	_, err = feltrinelliBooksCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
 	if err != nil {
@@ -217,30 +204,14 @@ func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
 		panic(err)
 	}
 
-	// Change availability if book is published
-	var booksToUpdateModels []mongo.WriteModel
-	for _, ISBN := range feltrinelliBooksISBNs {
-		documents, _ := ebayDataCollection.CountDocuments(context.TODO(), bson.M{"ISBN": ISBN})
-		if documents > 0 {
-			model := mongo.NewUpdateOneModel()
-			model.SetFilter(bson.M{"ISBN": ISBN})
-			model.SetUpsert(true)
-			model.SetUpdate(bson.M{"$set": bson.M{"ISBN": ISBN}})
-			booksToUpdateModels = append(booksToUpdateModels, model)
-		}
+	// Delete products with given URLs
+	_, err = feltrinelliProductsCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
+	if err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
+		panic(err)
 	}
 
-	// TODO reason about whether this is actually needed, or needs to be checked during repricing, or both
-	if len(booksToUpdateModels) > 0 {
-		fmt.Println("Storing books which disappeared as books to update")
-		_, err = booksToUpdateCollection.BulkWrite(context.TODO(), booksToUpdateModels)
-		if err != nil {
-			_, err = fmt.Fprintln(os.Stderr, "Error occurred during bulk write operation:", err)
-			return
-		}
-	}
-
-	fmt.Println("Removed all unseen products in ", time.Since(startTime).Seconds(), "seconds.")
+	fmt.Println("Removed all unseen Feltrinelli products and books in ", time.Since(startTime).Seconds(), "seconds.")
 }
 
 func BuildFeltrinelliPriceOrAvailabilityUpdateModel(bookPartial DataTypes.BookPartial) mongo.WriteModel {
