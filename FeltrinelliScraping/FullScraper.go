@@ -109,12 +109,13 @@ func scrapeAllXMLs() {
 
 	startTime := time.Now()
 
-	proxies := Proxy.GetProxies()
+	numOfSitemaps := fetchNumberOfSitemaps()
 	wg := sync.WaitGroup{}
-	wg.Add(len(proxies))
+	wg.Add(numOfSitemaps)
+	proxies := Proxy.GetProxies()
 	mutex := sync.Mutex{}
 
-	for i := 1; i <= fetchNumberOfSitemaps(); i++ {
+	for i := 1; i <= numOfSitemaps; i++ {
 		go func(index int) {
 			urlSet, err := downloadAndParseXML(index, proxies[index%len(proxies)])
 			if err != nil {
