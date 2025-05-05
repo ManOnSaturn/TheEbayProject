@@ -34,22 +34,28 @@ func FullScrape() {
 	fullBooksChan := make(chan *DataTypes.FeltrinelliScrapedBook)
 
 	proxies := Proxy.GetProxies()
-	wg := sync.WaitGroup{}
-	wg.Add(len(proxies))
+	scrapersWaitGroup := sync.WaitGroup{}
+	scrapersWaitGroup.Add(len(proxies))
 
 	fakeChrome := ChromeClient.GetChromeClient()
 
 	for _, proxy := range proxies {
 		go func(proxy string) {
-			defer wg.Done()
+			defer scrapersWaitGroup.Done()
 			getProductInfos(urlsChan, fullBooksChan, proxy, fakeChrome)
 		}(proxy)
 	}
 
-	go handleScrapedBooks(fullBooksChan)
+	handlerWaitGroup := sync.WaitGroup{}
+	handlerWaitGroup.Add(1)
+	go func() {
+		defer handlerWaitGroup.Done()
+		handleScrapedBooks(fullBooksChan)
+	}()
 
-	wg.Wait()
+	scrapersWaitGroup.Wait()
 	close(fullBooksChan)
+	handlerWaitGroup.Wait()
 
 	fmt.Println("Finished Feltrinelli full scraping in ", time.Since(startTime).Seconds(), "seconds.")
 }
