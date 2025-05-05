@@ -57,7 +57,7 @@ func FullScrape() {
 	close(fullBooksChan)
 	handlerWaitGroup.Wait()
 
-	fmt.Println("Finished Feltrinelli full scraping in ", time.Since(startTime).Seconds(), "seconds.")
+	fmt.Println("Finished Feltrinelli full scraping in", time.Since(startTime).Seconds(), "seconds.")
 }
 
 func downloadAndParseXML(index int, proxy string) (*DataTypes.UrlSet, error) {
