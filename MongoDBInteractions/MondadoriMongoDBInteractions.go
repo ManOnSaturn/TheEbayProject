@@ -332,3 +332,36 @@ func UpsertMondadoriBooksAndProducts(models []mongo.WriteModel, models2 []mongo.
 
 	fmt.Println("Upserting took", time.Since(startTime).Seconds(), "seconds.")
 }
+
+func DeleteMondadoriBook(URL string) {
+	filter := bson.M{"URL": URL}
+	result, err := mondadoriBooksCollection.DeleteOne(context.TODO(), filter)
+	if err != nil {
+		panic(err)
+	}
+	if result != nil && result.DeletedCount < 1 {
+		panic("Mondadori book was not deleted. URL:" + URL)
+	}
+}
+
+func DeleteMondadoriProduct(URL string) {
+	filter := bson.M{"URL": URL}
+	result, err := mondadoriProductsCollection.DeleteOne(context.TODO(), filter)
+	if err != nil {
+		panic(err)
+	}
+	if result != nil && result.DeletedCount < 1 {
+		panic("Mondadori product was not deleted. URL:" + URL)
+	}
+}
+
+func GetMondadoriProduct(URL string) (*DataTypes.MondadoriProduct, error) {
+	filter := bson.M{"URL": URL}
+	var result DataTypes.MondadoriProduct
+	err := mondadoriProductsCollection.FindOne(context.TODO(), filter).Decode(&result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}

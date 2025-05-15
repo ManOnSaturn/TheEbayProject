@@ -2,6 +2,7 @@ package main
 
 import (
 	"Scraper/AmazonScraping"
+	"Scraper/Ebay"
 	"Scraper/EbayBookBuilder"
 	"Scraper/FeltrinelliScraping"
 	"Scraper/MondadoriScraping"
@@ -39,6 +40,10 @@ func main() {
 	}
 	if len(os.Args) > 1 && os.Args[1] == "--fullScrapeFeltrinelli" {
 		FeltrinelliScraping.FullScrape()
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "--deleteDisappearedBooksFromFile" {
+		deleteDisappearedBooksFromFile()
 	}
 
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")
@@ -104,4 +109,51 @@ func getISBNsOfBooksOnEbay() map[string]bool {
 		isbns[ebayData.EbayData.ISBN] = true
 	}
 	return isbns
+}
+
+func deleteDisappearedBooksFromFile() {
+	isbn := "9788828787853"
+	ebayData := MongoDBInteractions.GetEbayData(isbn)
+	// The sequence of operations doesn't seem safe.
+	Ebay.DeleteOffer(ebayData.OfferId, false)
+	Ebay.DeleteInventoryItem(isbn, false)
+	MongoDBInteractions.DeleteEbayData(isbn)
+	MongoDBInteractions.DeleteEbayBook(isbn)
+	deleteMondadoriBookAndProduct(isbn)
+	deleteFeltrinelliBookAndProduct(isbn)
+}
+
+func deleteMondadoriBookAndProduct(isbn string) {
+	mondadoriBook, _ := MongoDBInteractions.GetMondadoriBook(isbn)
+	var mondadoriProductURL *string
+	if mondadoriBook != nil {
+		mondadoriProductURL = &mondadoriBook.URL
+	} else {
+		mondadoriProduct, _ := MongoDBInteractions.GetMondadoriProduct(isbn)
+		if mondadoriProduct != nil {
+			mondadoriProductURL = &mondadoriProduct.URL
+		}
+	}
+	if mondadoriProductURL != nil {
+		MongoDBInteractions.DeleteMondadoriBook(*mondadoriProductURL)
+		MongoDBInteractions.DeleteMondadoriProduct(*mondadoriProductURL)
+	}
+}
+
+func deleteFeltrinelliBookAndProduct(isbn string) {
+	feltrinelliBook, _ := MongoDBInteractions.GetFeltrinelliBook(isbn)
+	var feltrinelliProductURL *string
+	if feltrinelliBook != nil {
+		feltrinelliProductURL = &feltrinelliBook.URL
+	} else {
+		feltrinelliProduct, _ := MongoDBInteractions.GetFeltrinelliProduct(isbn)
+		if feltrinelliProduct == nil {
+			return
+		}
+		feltrinelliProductURL = &feltrinelliProduct.URL
+	}
+	if feltrinelliProductURL != nil {
+		MongoDBInteractions.DeleteFeltrinelliBook(*feltrinelliProductURL)
+		MongoDBInteractions.DeleteFeltrinelliProduct(*feltrinelliProductURL)
+	}
 }

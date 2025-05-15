@@ -4,10 +4,12 @@ import (
 	"Scraper/EbayBookBuilder/PriceConversion"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 )
 
@@ -76,4 +78,114 @@ func SearchMinCost(isbn string) float64 {
 	}
 
 	return math.Round(minCost*100) / 100
+}
+
+func DeleteOffer(offerID string, retrying bool) bool {
+	auth := getAccessToken()
+	client := &http.Client{}
+	req, err := http.NewRequest("DELETE", "https://api.ebay.com/sell/inventory/v1/offer/"+offerID, nil)
+	if err != nil {
+		_, err = fmt.Fprintf(os.Stderr, "Error creating request: %v\n", err)
+		if err != nil {
+			panic(err)
+		}
+		return false
+	}
+
+	// Set headers
+	req.Header.Set("Authorization", "Bearer "+auth)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Language", "it-IT")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		_, err = fmt.Fprintf(os.Stderr, "Error making request: %v\n", err)
+		if err != nil {
+			panic(err)
+		}
+		return false
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			panic(err)
+		}
+	}(resp.Body)
+
+	if resp.StatusCode == http.StatusNoContent { // 204
+		_, err = fmt.Printf("Offer %s deleted successfully.\n", offerID)
+		if err != nil {
+			panic(err)
+		}
+		return true
+	}
+
+	if resp.StatusCode == http.StatusInternalServerError && !retrying { // 500
+		fmt.Println("Internal Server Error(500) occurred. Retrying delete offer.")
+		return DeleteOffer(offerID, true)
+	}
+
+	_, err = fmt.Fprintf(os.Stderr, "Offer %s deletion failed: %v\n", offerID, resp)
+	if err != nil {
+		panic(err)
+	}
+	return false
+}
+
+func DeleteInventoryItem(isbn string, retrying bool) bool {
+	auth := getAccessToken()
+	client := &http.Client{}
+	req, err := http.NewRequest(
+		"DELETE",
+		"https://api.ebay.com/sell/inventory/v1/inventory_item/"+isbn,
+		nil,
+	)
+	if err != nil {
+		_, err = fmt.Fprintf(os.Stderr, "Error creating request for ISBN %s: %v\n", isbn, err)
+		if err != nil {
+			panic(err)
+		}
+		return false
+	}
+
+	// Set headers
+	req.Header.Set("Authorization", "Bearer "+auth)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Language", "it-IT")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		_, err = fmt.Fprintf(os.Stderr, "Error deleting inventory item %s: %v\n", isbn, err)
+		if err != nil {
+			panic(err)
+		}
+		return false
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			panic(err)
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusNoContent { // 204
+		_, err = fmt.Fprintf(os.Stderr, "Status code is %d when deleting %s, and we don't know why.\n", resp.StatusCode, isbn)
+		if err != nil {
+			panic(err)
+		}
+		return false
+	}
+
+	if resp.StatusCode == http.StatusInternalServerError && !retrying { // 500
+		fmt.Println("Internal Server Error(500) occurred. Retrying delete offer.")
+		return DeleteInventoryItem(isbn, true)
+	}
+
+	_, err = fmt.Printf("Item %s deleted successfully.\n", isbn)
+	if err != nil {
+		panic(err)
+	}
+	return true
 }

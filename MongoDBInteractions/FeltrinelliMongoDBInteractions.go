@@ -257,6 +257,28 @@ func DeleteFeltrinelliBook(URL string) {
 	}
 }
 
+func DeleteFeltrinelliProduct(URL string) {
+	filter := bson.M{"URL": URL}
+	result, err := feltrinelliProductsCollection.DeleteOne(context.TODO(), filter)
+	if err != nil {
+		panic(err)
+	}
+	if result != nil && result.DeletedCount < 1 {
+		panic("Feltrinelli product was not deleted. URL:" + URL)
+	}
+}
+
+func GetFeltrinelliProduct(URL string) (*DataTypes.FeltrinelliProduct, error) {
+	filter := bson.M{"URL": URL}
+	var result DataTypes.FeltrinelliProduct
+	err := feltrinelliProductsCollection.FindOne(context.TODO(), filter).Decode(&result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
 func SetBookIsRedirected(URL string) {
 	filter := bson.M{"URL": URL}
 	update := bson.M{"$set": bson.M{"Availability": "Redirected"}}

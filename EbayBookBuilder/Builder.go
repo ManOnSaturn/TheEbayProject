@@ -190,6 +190,7 @@ func BuildEbayBooks(isbns map[string]bool) map[string]DataTypes.EbayBook {
 				oldEbayBook.Available = false
 				ebayBooks[isbn] = *oldEbayBook
 			}
+			//TODO HERE!
 		}
 	}
 	return ebayBooks

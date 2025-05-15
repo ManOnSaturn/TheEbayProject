@@ -107,6 +107,14 @@ func DeleteEbayBook(isbn string) {
 	}
 }
 
+func DeleteEbayData(isbn string) {
+	filter := bson.M{"ISBN": isbn}
+	_, err := ebayDataCollection.DeleteOne(context.Background(), filter)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func UpsertEbayData(models []mongo.WriteModel) {
 	if len(models) == 0 {
 		return
@@ -125,4 +133,14 @@ func GetEbayBook(isbn string) *DataTypes.EbayBook {
 		return nil
 	}
 	return &ebayBook
+}
+
+func GetEbayData(isbn string) *DataTypes.EbayData {
+	filter := bson.M{"ISBN": isbn}
+	var ebayData DataTypes.EbayData
+	findOneError := ebayDataCollection.FindOne(context.TODO(), filter).Decode(&ebayData)
+	if findOneError != nil {
+		return nil
+	}
+	return &ebayData
 }
