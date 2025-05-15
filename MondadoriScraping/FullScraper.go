@@ -149,7 +149,7 @@ func scrapeBooks(urlsChan <-chan string, booksChan chan<- *DataTypes.MondadoriBo
 		err := c.Visit(url)
 		if err != nil {
 			errorsNumber++
-			_, err = fmt.Fprintf(os.Stderr, "Error during scrapeBooks with url %s: %v\n", url, err)
+			_, err = fmt.Fprintf(os.Stderr, "Error during scrapeBooks with url %s: %v. Proxy %s has failed %d times.\n", url, err, proxy, errorsNumber)
 			if err != nil {
 				panic(err)
 			}
@@ -158,6 +158,7 @@ func scrapeBooks(urlsChan <-chan string, booksChan chan<- *DataTypes.MondadoriBo
 				if err != nil {
 					panic(err)
 				}
+				return
 			}
 		}
 	}
