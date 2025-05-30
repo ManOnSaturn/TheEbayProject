@@ -2,6 +2,7 @@ package main
 
 import (
 	"Scraper/AmazonScraping"
+	"Scraper/DataTypes"
 	"Scraper/Ebay"
 	"Scraper/EbayBookBuilder"
 	"Scraper/FeltrinelliScraping"
@@ -43,7 +44,28 @@ func main() {
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "--deleteDisappearedBooksFromFile" {
-		deleteDisappearedBooksFromFile()
+		deleteDisappearedBooksFromFile("")
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "--deleteAllBooksFromEbay" {
+		items, err := Ebay.GetInventoryItems()
+		if err != nil {
+			return
+		}
+		wg := sync.WaitGroup{}
+		semaphore := DataTypes.NewSemaphore(10)
+		for _, item := range items {
+			semaphore.Acquire()
+			wg.Add(1)
+			go func() {
+				defer func() {
+					wg.Done()
+					semaphore.Release()
+				}()
+				deleteBookFromEbay(item.SKU)
+			}()
+		}
+		wg.Wait()
 	}
 
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")
@@ -69,7 +91,7 @@ func reprice() {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		FeltrinelliScraping.Repricer()
+		//FeltrinelliScraping.Repricer()
 	}()
 	go func() {
 		defer wg.Done()
@@ -111,16 +133,19 @@ func getISBNsOfBooksOnEbay() map[string]bool {
 	return isbns
 }
 
-func deleteDisappearedBooksFromFile() {
-	isbn := "9788828787853"
-	ebayData := MongoDBInteractions.GetEbayData(isbn)
+func deleteDisappearedBooksFromFile(isbn string) {
 	// The sequence of operations doesn't seem safe.
+	deleteBookFromEbay(isbn)
+	deleteMondadoriBookAndProduct(isbn)
+	deleteFeltrinelliBookAndProduct(isbn)
+}
+
+func deleteBookFromEbay(isbn string) {
+	ebayData := MongoDBInteractions.GetEbayData(isbn)
 	Ebay.DeleteOffer(ebayData.OfferId, false)
 	Ebay.DeleteInventoryItem(isbn, false)
 	MongoDBInteractions.DeleteEbayData(isbn)
 	MongoDBInteractions.DeleteEbayBook(isbn)
-	deleteMondadoriBookAndProduct(isbn)
-	deleteFeltrinelliBookAndProduct(isbn)
 }
 
 func deleteMondadoriBookAndProduct(isbn string) {

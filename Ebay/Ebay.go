@@ -189,3 +189,86 @@ func DeleteInventoryItem(isbn string, retrying bool) bool {
 	}
 	return true
 }
+
+type InventoryItem struct {
+	SKU string `json:"sku"`
+}
+
+type InventoryResponse struct {
+	InventoryItems []InventoryItem `json:"inventoryItems"`
+	Total          int             `json:"total"`
+}
+
+func GetInventoryItems() ([]InventoryItem, error) {
+	auth := getAccessToken()
+	headers := map[string]string{
+		"Authorization":    "Bearer " + auth,
+		"Content-Type":     "application/json",
+		"Content-Language": "it-IT",
+		"Accept":           "application/json",
+	}
+
+	// Make the first request
+	firstResp, err := makeRequest("https://api.ebay.com/sell/inventory/v1/inventory_item?limit=200&offset=0", headers)
+	if err != nil {
+		return nil, err
+	}
+
+	var firstResponse InventoryResponse
+	err = json.Unmarshal(firstResp, &firstResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	inventoryItems := make([]InventoryItem, len(firstResponse.InventoryItems))
+	copy(inventoryItems, firstResponse.InventoryItems)
+	numElements := firstResponse.Total
+
+	// Continue fetching until we have all items
+	for len(inventoryItems) < numElements {
+		url := fmt.Sprintf("https://api.ebay.com/sell/inventory/v1/inventory_item?limit=200&offset=%d", len(inventoryItems))
+		resp, err := makeRequest(url, headers)
+		if err != nil {
+			return nil, err
+		}
+
+		var response InventoryResponse
+		err = json.Unmarshal(resp, &response)
+		if err != nil {
+			return nil, err
+		}
+
+		inventoryItems = append(inventoryItems, response.InventoryItems...)
+	}
+
+	return inventoryItems, nil
+}
+
+func makeRequest(url string, headers map[string]string) ([]byte, error) {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	for key, value := range headers {
+		req.Header.Add(key, value)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return body, nil
+}
