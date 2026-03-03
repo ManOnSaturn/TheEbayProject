@@ -3,9 +3,10 @@ package MongoDBInteractions
 import (
 	"Scraper/DataTypes"
 	"context"
+	"log"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"log"
 )
 
 func IsASINStored(ASIN string) bool {

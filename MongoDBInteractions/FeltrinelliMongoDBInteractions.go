@@ -5,14 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func GetAllFeltrinelliBooksOnEbay() map[string]DataTypes.EbayDataWithFeltrinelliBook {
@@ -90,7 +91,7 @@ func deleteFeltrinelliBook(URL string) {
 	}
 }
 
-// Formats a json.Number, so an integer (ex. 1234, 345), into a formatted string,
+// FormatNumberIntoString Formats a json.Number, so an integer (ex. 1234, 345), into a formatted string,
 // representing a float(ex. 12,34, 3,45).
 func FormatNumberIntoString(number json.Number) (string, error) {
 	// Parse the JSON number into an integer
@@ -293,9 +294,9 @@ func getEAN(s string) string {
 
 	if lastSlashIndex != -1 {
 		return s[lastSlashIndex+1:]
-	} else {
-		panic("No '/' found in the string.")
 	}
+
+	panic("No '/' found in the string.")
 }
 
 func BuildFeltrinelliProductUpsertModel(entry DataTypes.URL, lastSeen time.Time) *mongo.UpdateOneModel {

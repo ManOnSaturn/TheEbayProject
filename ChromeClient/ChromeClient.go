@@ -1,8 +1,9 @@
 package ChromeClient
 
 import (
-	"github.com/imroc/req/v3"
 	"sync"
+
+	"github.com/imroc/req/v3"
 )
 
 var ChromeClient *req.Client

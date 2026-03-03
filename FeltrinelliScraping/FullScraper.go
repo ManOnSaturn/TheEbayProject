@@ -7,9 +7,6 @@ import (
 	"Scraper/Proxy"
 	"encoding/xml"
 	"fmt"
-	"github.com/gocolly/colly/v2"
-	"github.com/imroc/req/v3"
-	"go.mongodb.org/mongo-driver/mongo"
 	"io"
 	"log"
 	"net/http"
@@ -20,6 +17,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gocolly/colly/v2"
+	"github.com/imroc/req/v3"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func FullScrape() {
@@ -29,7 +30,6 @@ func FullScrape() {
 
 	urlsChan := make(chan string)
 	go MongoDBInteractions.GetAllBookProductsAndNewProductsURLsIntoChannel(urlsChan)
-	//go testSendingProducts(urlsChan)
 
 	fullBooksChan := make(chan *DataTypes.FeltrinelliScrapedBook)
 
@@ -113,6 +113,9 @@ func scrapeAllXMLs() {
 	startTime := time.Now()
 
 	numOfSitemaps := fetchNumberOfSitemaps()
+	if numOfSitemaps <= 0 {
+		return
+	}
 	wg := sync.WaitGroup{}
 	wg.Add(numOfSitemaps)
 	proxies := Proxy.GetProxies()
@@ -140,7 +143,7 @@ func scrapeAllXMLs() {
 
 	lastSeen := time.Now()
 
-	startTime = time.Now() // This takes about 236 seconds
+	startTime = time.Now()
 	for urlSetsIndex, urlSet := range urlSets {
 		for _, entry := range urlSet.URLs {
 			model := MongoDBInteractions.BuildFeltrinelliProductUpsertModel(entry, lastSeen)
@@ -168,7 +171,11 @@ func scrapeAllXMLs() {
 
 func fetchNumberOfSitemaps() int {
 	// Fetch the XML content from the URL
-	err, resp := getRequestWithHeader("https://www.lafeltrinelli.it/sitemap_itbook_index.xml")
+	resp, err := getRequestWithHeader("https://www.lafeltrinelli.it/sitemap_itbook_index.xml")
+	if err != nil || resp == nil {
+		fmt.Println("Error fetching sitemap index:", err)
+		return -1
+	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
@@ -214,11 +221,11 @@ func fetchNumberOfSitemaps() int {
 	return maxNumber
 }
 
-func getRequestWithHeader(url string) (error, *http.Response) {
+func getRequestWithHeader(url string) (*http.Response, error) {
 	// Create a new HTTP request
 	request, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return fmt.Errorf("error creating request: %v", err), nil
+		return nil, fmt.Errorf("error creating request: %v", err)
 	}
 
 	// Set a custom User-Agent
@@ -228,15 +235,15 @@ func getRequestWithHeader(url string) (error, *http.Response) {
 	client := &http.Client{}
 	resp, err := client.Do(request)
 	if err != nil {
-		return fmt.Errorf("error making request: %v", err), resp
+		return resp, fmt.Errorf("error making request: %v", err)
 	}
 
 	// Check if the response status code is OK
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("error: Received non-200 response code: %d", resp.StatusCode), nil
+		return nil, fmt.Errorf("error: Received non-200 response code: %d", resp.StatusCode)
 	}
 
-	return err, resp
+	return resp, err
 }
 
 func cleanDescription(input string) string {
@@ -393,11 +400,6 @@ func getProductInfos(urlsChan <-chan string, fullBooksChan chan<- *DataTypes.Fel
 		}
 	}
 	c.Wait()
-}
-
-func testSendingProducts(urlsChan chan<- string) {
-	urlsChan <- "https://www.lafeltrinelli.it/siti-sacri-segreti-ediz-illustrata-libro-martin-gray/e/9782361956875"
-	close(urlsChan)
 }
 
 func handleScrapedBooks(fullBooksChan <-chan *DataTypes.FeltrinelliScrapedBook) {

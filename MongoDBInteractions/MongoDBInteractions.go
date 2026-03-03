@@ -4,11 +4,12 @@ import (
 	"Scraper/DataTypes"
 	"context"
 	"fmt"
+	"os"
+	"runtime"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"os"
-	"runtime"
 )
 
 func DisconnectFromMongo() {
@@ -110,16 +111,6 @@ func DeleteEbayBook(isbn string) {
 func DeleteEbayData(isbn string) {
 	filter := bson.M{"ISBN": isbn}
 	_, err := ebayDataCollection.DeleteOne(context.Background(), filter)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func UpsertEbayData(models []mongo.WriteModel) {
-	if len(models) == 0 {
-		return
-	}
-	_, err := ebayDataCollection.BulkWrite(context.Background(), models)
 	if err != nil {
 		panic(err)
 	}

@@ -71,7 +71,7 @@ func getCategorySwitch(categoryName string) DataTypes.Category {
 	}
 }
 
-// Function to get the category ID based on the input string
+// GetCategoryIDMondadori Get the category ID based on the input string
 func GetCategoryIDMondadori(category string) DataTypes.Category {
 	// Split the input string and get the last part
 	splitCategories := strings.Split(category, ">")

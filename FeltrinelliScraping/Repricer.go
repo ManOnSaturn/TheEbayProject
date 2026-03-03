@@ -4,14 +4,15 @@ import (
 	"Scraper/DataTypes"
 	"Scraper/MongoDBInteractions"
 	"fmt"
-	"github.com/gocolly/colly/v2"
-	"github.com/imroc/req/v3"
-	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"net/http"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/gocolly/colly/v2"
+	"github.com/imroc/req/v3"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func Repricer() {
@@ -63,8 +64,6 @@ func scrapeRepricerBooks(ebayDataWithFeltrinelliBooks map[string]DataTypes.EbayD
 		if e.Attr(":is-ebook") == "true" {
 			// This should never happen. If it's happening, it means that an ebook has the same url of a normal book
 			log.Fatalf("Book during repricing is ebook. URL: %s", e.Request.URL.String())
-			//MongoDBInteractions.SetProductIsBook(e.Request.URL.String(), false)
-			//MongoDBInteractions.DeleteFeltrinelliBook(e.Request.URL.String())
 			return
 		}
 

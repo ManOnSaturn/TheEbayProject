@@ -6,15 +6,16 @@ import (
 	"Scraper/MongoDBInteractions"
 	"Scraper/Proxy"
 	"fmt"
-	"github.com/gocolly/colly/v2"
-	"github.com/imroc/req/v3"
-	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gocolly/colly/v2"
+	"github.com/imroc/req/v3"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func FullScrape() {
@@ -64,7 +65,7 @@ func FullScrape() {
 		fmt.Println("Upserted ", booksAndProductsUpserted, " books and products.")
 	}
 	// In the future, we might want to check whether there are no new mondadori categories in the database, which we don't know of
-	//checkNoNewMondadoriCategory()
+	//with something like checkNoNewMondadoriCategory()
 }
 
 func scrapeBooks(urlsChan <-chan string, booksChan chan<- *DataTypes.MondadoriBook, proxy string, fakeChrome *req.Client) {

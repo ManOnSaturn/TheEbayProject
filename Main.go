@@ -10,11 +10,12 @@ import (
 	"Scraper/MongoDBInteractions"
 	"Scraper/PythonInteractions"
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"os"
 	"sync"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 import _ "net/http/pprof"
 
@@ -22,11 +23,6 @@ func main() {
 	startTime := time.Now()
 	MongoDBInteractions.ConnectToMongo()
 	defer MongoDBInteractions.DisconnectFromMongo()
-
-	//go func() {
-	//	log.Println(http.ListenAndServe("0.0.0.0:8888", nil))
-	//	panic("what")
-	//}()
 
 	if len(os.Args) > 1 && os.Args[1] == "--scrapeBestsellers" {
 		AmazonScraping.ScrapeBestsellers()
@@ -91,7 +87,7 @@ func reprice() {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		//FeltrinelliScraping.Repricer()
+		FeltrinelliScraping.Repricer()
 	}()
 	go func() {
 		defer wg.Done()
@@ -142,6 +138,9 @@ func deleteDisappearedBooksFromFile(isbn string) {
 
 func deleteBookFromEbay(isbn string) {
 	ebayData := MongoDBInteractions.GetEbayData(isbn)
+	if ebayData == nil {
+		return
+	}
 	Ebay.DeleteOffer(ebayData.OfferId, false)
 	Ebay.DeleteInventoryItem(isbn, false)
 	MongoDBInteractions.DeleteEbayData(isbn)

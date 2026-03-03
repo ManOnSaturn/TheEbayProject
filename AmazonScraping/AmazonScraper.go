@@ -7,15 +7,16 @@ import (
 	"Scraper/Proxy"
 	"encoding/json"
 	"fmt"
-	"github.com/gocolly/colly/v2"
-	"github.com/imroc/req/v3"
-	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"net/http"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gocolly/colly/v2"
+	"github.com/imroc/req/v3"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // https://www.amazon.it/gp/bestsellers/books

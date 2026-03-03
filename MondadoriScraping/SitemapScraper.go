@@ -8,7 +8,6 @@ import (
 	"compress/gzip"
 	"encoding/xml"
 	"fmt"
-	"go.mongodb.org/mongo-driver/mongo"
 	"io"
 	"log"
 	"net/http"
@@ -17,6 +16,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func scrapeXMLs() {
@@ -67,7 +68,11 @@ func scrapeXMLs() {
 
 func fetchNumberOfSitemaps() int {
 	// Fetch the XML content from the URL
-	err, resp := getRequestWithHeader("https://www.mondadoristore.it/sitemap.xml", nil)
+	resp, err := getRequestWithHeader("https://www.mondadoristore.it/sitemap.xml", nil)
+	if err != nil || resp == nil {
+		fmt.Println("Error fetching sitemap:", err)
+		return -1
+	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
@@ -115,7 +120,7 @@ func fetchNumberOfSitemaps() int {
 
 func downloadAndUncompressGzToXML(index int, proxy string) (*DataTypes.MondadoriSitemapItemFile, error) {
 	URL := "https://www.mondadoristore.it/sitemap-libri-" + strconv.Itoa(index) + ".xml.gz"
-	err, resp := getRequestWithHeader(URL, &proxy)
+	resp, err := getRequestWithHeader(URL, &proxy)
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
@@ -158,11 +163,11 @@ func downloadAndUncompressGzToXML(index int, proxy string) (*DataTypes.Mondadori
 	return &mondadoriSitemapItemFile, nil
 }
 
-func getRequestWithHeader(URL string, proxy *string) (error, *http.Response) {
+func getRequestWithHeader(URL string, proxy *string) (*http.Response, error) {
 	// Create a new HTTP request
 	req, err := http.NewRequest("GET", URL, nil)
 	if err != nil {
-		return fmt.Errorf("error creating request: %v", err), nil
+		return nil, fmt.Errorf("error creating request: %v", err)
 	}
 
 	// Set a custom User-Agent
@@ -174,7 +179,7 @@ func getRequestWithHeader(URL string, proxy *string) (error, *http.Response) {
 	if proxy != nil && *proxy != "" {
 		proxyUrl, err := url.Parse(*proxy)
 		if err != nil {
-			return fmt.Errorf("error parsing proxy URL: %v", err), nil
+			return nil, fmt.Errorf("error parsing proxy URL: %v", err)
 		}
 
 		transport := &http.Transport{
@@ -189,13 +194,13 @@ func getRequestWithHeader(URL string, proxy *string) (error, *http.Response) {
 	// Send the request
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("error making request: %v", err), resp
+		return resp, fmt.Errorf("error making request: %v", err)
 	}
 
 	// Check if the response status code is OK
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("error: Received non-200 response code: %d", resp.StatusCode), nil
+		return nil, fmt.Errorf("error: Received non-200 response code: %d", resp.StatusCode)
 	}
 
-	return err, resp
+	return resp, err
 }
