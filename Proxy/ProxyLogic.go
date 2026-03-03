@@ -2,6 +2,7 @@ package Proxy
 
 import (
 	"Scraper/DataTypes"
+	"Scraper/HttpUtil"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -28,7 +29,7 @@ func GetProxies() []string {
 		fmt.Println("Error making request:", err)
 		return nil
 	}
-	defer resp.Body.Close() // Ensure the response body is closed
+	defer HttpUtil.CloseBody(resp.Body)
 
 	// Check if the response status code is OK (200)
 	if resp.StatusCode != http.StatusOK {

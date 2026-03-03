@@ -3,6 +3,7 @@ package FeltrinelliScraping
 import (
 	"Scraper/ChromeClient"
 	"Scraper/DataTypes"
+	"Scraper/HttpUtil"
 	"Scraper/MongoDBInteractions"
 	"Scraper/Proxy"
 	"encoding/xml"
@@ -166,22 +167,17 @@ func scrapeAllXMLs() {
 	}
 	fmt.Printf("Finished processing all URLs in %g\n", time.Since(startTime).Seconds())
 
-	MongoDBInteractions.RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen)
+	MongoDBInteractions.RemoveAllUnseenProductsAndBooks(lastSeen, MongoDBInteractions.Feltrinelli)
 }
 
 func fetchNumberOfSitemaps() int {
 	// Fetch the XML content from the URL
-	resp, err := getRequestWithHeader("https://www.lafeltrinelli.it/sitemap_itbook_index.xml")
+	resp, err := HttpUtil.GetRequestWithHeader("https://www.lafeltrinelli.it/sitemap_itbook_index.xml", nil)
 	if err != nil || resp == nil {
 		fmt.Println("Error fetching sitemap index:", err)
 		return -1
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			fmt.Println("error closing body", err)
-		}
-	}(resp.Body)
+	defer HttpUtil.CloseBody(resp.Body)
 
 	// Read the response body
 	body, err := io.ReadAll(resp.Body)
@@ -219,31 +215,6 @@ func fetchNumberOfSitemaps() int {
 	}
 
 	return maxNumber
-}
-
-func getRequestWithHeader(url string) (*http.Response, error) {
-	// Create a new HTTP request
-	request, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error creating request: %v", err)
-	}
-
-	// Set a custom User-Agent
-	request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36")
-
-	// Send the request
-	client := &http.Client{}
-	resp, err := client.Do(request)
-	if err != nil {
-		return resp, fmt.Errorf("error making request: %v", err)
-	}
-
-	// Check if the response status code is OK
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error: Received non-200 response code: %d", resp.StatusCode)
-	}
-
-	return resp, err
 }
 
 func cleanDescription(input string) string {

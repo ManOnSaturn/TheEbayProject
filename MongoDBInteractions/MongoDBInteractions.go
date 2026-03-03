@@ -4,8 +4,10 @@ import (
 	"Scraper/DataTypes"
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"runtime"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -64,16 +66,6 @@ func ConnectToMongo() {
 	fmt.Println("Pinged mongodb deployment. Successfully connected to MongoDB!")
 }
 
-func GetAllEbayBooks() []DataTypes.EbayBook {
-	cursor, _ := ebayBooksCollection.Find(context.TODO(), bson.M{})
-	var ebayBooks []DataTypes.EbayBook
-	err := cursor.All(context.TODO(), &ebayBooks)
-	if err != nil {
-		panic(err)
-	}
-	return ebayBooks
-}
-
 func AddBookToUpdate(isbn string) {
 	filter := bson.M{"ISBN": isbn}
 	update := bson.M{"$set": bson.M{"ISBN": isbn}}
@@ -84,54 +76,85 @@ func AddBookToUpdate(isbn string) {
 	}
 }
 
-func CreateUpsertModelForEbayBooks(ebayBook DataTypes.EbayBook) mongo.WriteModel {
-	filter := bson.M{"ISBN": ebayBook.ISBN}
-	update := bson.M{"$set": ebayBook}
-	return mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true)
-}
+type Publisher string
 
-func UpsertEbayBooks(models []mongo.WriteModel) {
-	if len(models) == 0 {
+const (
+	Mondadori   Publisher = "Mondadori"
+	Feltrinelli Publisher = "Feltrinelli"
+)
+
+func RemoveAllUnseenProductsAndBooks(lastSeen time.Time, publisher Publisher) {
+	var productsCollection *mongo.Collection
+	var booksCollection *mongo.Collection
+	switch publisher {
+	case Mondadori:
+		productsCollection = mondadoriProductsCollection
+		booksCollection = mondadoriBooksCollection
+	case Feltrinelli:
+		productsCollection = feltrinelliProductsCollection
+		booksCollection = feltrinelliBooksCollection
+	default:
+		panic("Unsupported publisher")
+	}
+
+	fmt.Println("Removing all unseen", publisher, "products.")
+	startTime := time.Now()
+	filter := bson.M{
+		"LastSeen": bson.M{
+			"$ne": lastSeen,
+		},
+	}
+
+	cursor, err := productsCollection.Find(context.TODO(), filter)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(cur *mongo.Cursor, ctx context.Context) {
+		err := cur.Close(ctx)
+		if err != nil {
+			_, err := fmt.Fprintln(os.Stderr, "Error occurred while closing cursor", err)
+			panic(err)
+		}
+	}(cursor, context.TODO())
+
+	deleteModels := make([]mongo.WriteModel, 0)
+	for cursor.Next(context.TODO()) {
+		// This can be either MondadoriProduct or FeltrinelliProduct.
+		var result DataTypes.URLDocument
+		err := cursor.Decode(&result)
+		if err != nil {
+			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
+			if err != nil {
+				panic(err)
+			}
+		}
+		model := mongo.NewDeleteOneModel()
+		model.SetFilter(bson.M{"URL": result.URL})
+		deleteModels = append(deleteModels, model)
+	}
+
+	if len(deleteModels) == 0 {
 		return
 	}
-	_, err := ebayBooksCollection.BulkWrite(context.Background(), models)
+
+	fmt.Printf("Removing %d products.\n", len(deleteModels))
+
+	bulkOption := options.BulkWrite().SetOrdered(false)
+
+	// DELETING BOOKS MUST ALWAYS HAPPEN BEFORE DELETING PRODUCTS!!!
+	// Delete books with given URLs
+	_, err = booksCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
 	if err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
 		panic(err)
 	}
-}
 
-func DeleteEbayBook(isbn string) {
-	filter := bson.M{"ISBN": isbn}
-	_, err := ebayBooksCollection.DeleteOne(context.Background(), filter)
+	// Delete products with given URLs
+	_, err = productsCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
 	if err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
 		panic(err)
 	}
-}
 
-func DeleteEbayData(isbn string) {
-	filter := bson.M{"ISBN": isbn}
-	_, err := ebayDataCollection.DeleteOne(context.Background(), filter)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func GetEbayBook(isbn string) *DataTypes.EbayBook {
-	filter := bson.M{"ISBN": isbn}
-	var ebayBook DataTypes.EbayBook
-	findOneError := ebayBooksCollection.FindOne(context.TODO(), filter).Decode(&ebayBook)
-	if findOneError != nil {
-		return nil
-	}
-	return &ebayBook
-}
-
-func GetEbayData(isbn string) *DataTypes.EbayData {
-	filter := bson.M{"ISBN": isbn}
-	var ebayData DataTypes.EbayData
-	findOneError := ebayDataCollection.FindOne(context.TODO(), filter).Decode(&ebayData)
-	if findOneError != nil {
-		return nil
-	}
-	return &ebayData
+	fmt.Println("Removed all unseen", publisher, "products and books in", time.Since(startTime).Seconds(), "seconds.")
 }

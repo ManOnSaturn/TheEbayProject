@@ -62,7 +62,7 @@ func scrapeXMLs() {
 		MongoDBInteractions.BulkWriteMondadoriProducts(models)
 	}
 
-	MongoDBInteractions.RemoveAllUnseenProductsAndBooksMondadori(lastSeen)
+	MongoDBInteractions.RemoveAllUnseenProductsAndBooks(lastSeen, MongoDBInteractions.Mondadori)
 }
 
 func fetchNumberOfSitemaps() int {

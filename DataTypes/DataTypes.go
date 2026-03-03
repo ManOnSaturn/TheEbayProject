@@ -166,13 +166,13 @@ type URLDocument struct {
 }
 
 type FeltrinelliProduct struct {
-	URL string `bson:"URL"`
-	EAN string `bson:"EAN"`
+	URLDocument `bson:",inline"`
+	EAN         string `bson:"EAN"`
 }
 
 type MondadoriProduct struct {
-	URL  string `bson:"URL"`
-	ISBN string `bson:"ISBN"`
+	URLDocument `bson:",inline"`
+	ISBN        string `bson:"ISBN"`
 }
 
 type Results struct {

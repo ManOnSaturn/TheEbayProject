@@ -85,7 +85,7 @@ func DeleteOffer(offerID string, retrying bool) bool {
 	client := &http.Client{}
 	req, err := http.NewRequest("DELETE", "https://api.ebay.com/sell/inventory/v1/offer/"+offerID, nil)
 	if err != nil {
-		_, err = fmt.Fprintf(os.Stderr, "Error creating request: %v\n", err)
+		_, err = fmt.Fprintln(os.Stderr, "Error creating request:", err)
 		if err != nil {
 			panic(err)
 		}
@@ -100,7 +100,7 @@ func DeleteOffer(offerID string, retrying bool) bool {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		_, err = fmt.Fprintf(os.Stderr, "Error making request: %v\n", err)
+		_, err = fmt.Fprintln(os.Stderr, "Error making request:", err)
 		if err != nil {
 			panic(err)
 		}

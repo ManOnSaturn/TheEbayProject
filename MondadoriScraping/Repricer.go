@@ -6,9 +6,10 @@ import (
 	"Scraper/MongoDBInteractions"
 	"Scraper/Proxy"
 	"fmt"
-	"go.mongodb.org/mongo-driver/mongo"
 	"sync"
 	"time"
+
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func Repricer() {

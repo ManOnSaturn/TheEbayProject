@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -152,68 +151,6 @@ func InsertFeltrinelliScrapedBook(feltrinelliScrapedBook *DataTypes.FeltrinelliS
 	}
 
 	SetProductIsBook(feltrinelliScrapedBook.BuyInfos.URL, true)
-}
-
-func RemoveAllUnseenProductsAndBooksFeltrinelli(lastSeen time.Time) {
-	fmt.Println("Removing all unseen Feltrinelli products.")
-	startTime := time.Now()
-	filter := bson.M{
-		"LastSeen": bson.M{
-			"$ne": lastSeen,
-		},
-	}
-
-	cursor, err := feltrinelliProductsCollection.Find(context.TODO(), filter)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func(cur *mongo.Cursor, ctx context.Context) {
-		err := cur.Close(ctx)
-		if err != nil {
-			_, err := fmt.Fprintln(os.Stderr, "Error occurred while closing cursor", err)
-			panic(err)
-		}
-	}(cursor, context.TODO())
-
-	deleteModels := make([]mongo.WriteModel, 0)
-	for cursor.Next(context.TODO()) {
-		var result DataTypes.FeltrinelliProduct
-		err := cursor.Decode(&result)
-		if err != nil {
-			_, err := fmt.Fprintln(os.Stderr, "Error occurred while decoding result", err)
-			if err != nil {
-				panic(err)
-			}
-		}
-		model := mongo.NewDeleteOneModel()
-		model.SetFilter(bson.M{"URL": result.URL})
-		deleteModels = append(deleteModels, model)
-	}
-
-	if len(deleteModels) == 0 {
-		return
-	}
-
-	fmt.Printf("Removing %d products.\n", len(deleteModels))
-
-	bulkOption := options.BulkWrite().SetOrdered(false)
-
-	// DELETING BOOKS MUST ALWAYS HAPPEN BEFORE DELETING PRODUCTS!!!
-	// Delete books with given URLs
-	_, err = feltrinelliBooksCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
-	if err != nil {
-		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
-		panic(err)
-	}
-
-	// Delete products with given URLs
-	_, err = feltrinelliProductsCollection.BulkWrite(context.TODO(), deleteModels, bulkOption)
-	if err != nil {
-		_, err := fmt.Fprintln(os.Stderr, "Error occurred during bulk delete operation:", err)
-		panic(err)
-	}
-
-	fmt.Println("Removed all unseen Feltrinelli products and books in ", time.Since(startTime).Seconds(), "seconds.")
 }
 
 func BuildFeltrinelliPriceOrAvailabilityUpdateModel(bookPartial DataTypes.BookPartial) mongo.WriteModel {
