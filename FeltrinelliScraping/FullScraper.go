@@ -80,12 +80,7 @@ func downloadAndParseXML(index int, proxy string) (*DataTypes.UrlSet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to download: %v", err)
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(resp.Body)
+	defer HttpUtil.CloseBody(resp.Body)
 
 	// Check if the response status is OK
 	if resp.StatusCode != http.StatusOK {

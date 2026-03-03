@@ -106,12 +106,7 @@ func DeleteOffer(offerID string, retrying bool) bool {
 		}
 		return false
 	}
-	defer func(Body io.ReadCloser) {
-		err = Body.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(resp.Body)
+	defer HttpUtil.CloseBody(resp.Body)
 
 	if resp.StatusCode == http.StatusNoContent { // 204
 		_, err = fmt.Printf("Offer %s deleted successfully.\n", offerID)
@@ -163,12 +158,7 @@ func DeleteInventoryItem(isbn string, retrying bool) bool {
 		}
 		return false
 	}
-	defer func(Body io.ReadCloser) {
-		err = Body.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(resp.Body)
+	defer HttpUtil.CloseBody(resp.Body)
 
 	if resp.StatusCode != http.StatusNoContent { // 204
 		_, err = fmt.Fprintf(os.Stderr, "Status code is %d when deleting %s, and we don't know why.\n", resp.StatusCode, isbn)
