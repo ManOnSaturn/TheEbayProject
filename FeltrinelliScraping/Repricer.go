@@ -67,13 +67,13 @@ func scrapeRepricerBooks(ebayDataWithFeltrinelliBooks map[string]DataTypes.EbayD
 			return
 		}
 
-		EAN := GetEANFromPath(e.Request.URL.Path)
+		EAN := getEANFromPath(e.Request.URL.Path)
 		var inventoryJSON DataTypes.InventoryJSON
-		if UnmarshalJSON([]byte(e.Attr(":inventory")), &inventoryJSON) != nil {
+		if unmarshalJSON([]byte(e.Attr(":inventory")), &inventoryJSON) != nil {
 			return
 		}
 		var availabilityJSON DataTypes.AvailabilityJSON
-		if UnmarshalJSON([]byte(e.Attr(":availability")), &availabilityJSON) != nil {
+		if unmarshalJSON([]byte(e.Attr(":availability")), &availabilityJSON) != nil {
 			return
 		}
 
@@ -93,7 +93,7 @@ func scrapeRepricerBooks(ebayDataWithFeltrinelliBooks map[string]DataTypes.EbayD
 
 	c.OnScraped(func(response *colly.Response) {
 		semaphore.Release()
-		EAN := GetEANFromPath(response.Request.URL.Path)
+		EAN := getEANFromPath(response.Request.URL.Path)
 
 		booksMapLock.Lock()
 		if fullBook, ok := booksMap[EAN]; !ok {
