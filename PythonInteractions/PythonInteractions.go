@@ -15,7 +15,7 @@ func StartPythonRepricer(updates int) {
 	cmd := exec.Command("/bin/bash", "/home/mattia/repricer/start_repricer.sh", repricerString)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		_, err := fmt.Fprintf(os.Stderr, "Error in starting repricer script from GoLang to Python: %s", err)
+		_, err := fmt.Fprintf(os.Stderr, "Error in starting repricer script from GoLang to Python: %s\n", err)
 		if err != nil {
 			return
 		}

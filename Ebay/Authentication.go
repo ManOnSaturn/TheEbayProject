@@ -1,11 +1,12 @@
 package Ebay
 
 import (
+	"Scraper/HttpUtil"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"sync"
@@ -76,10 +77,10 @@ func getAuthTokenRefreshed() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer HttpUtil.CloseBody(resp.Body)
 
 	// Read response body
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}

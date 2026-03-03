@@ -2,10 +2,10 @@ package Ebay
 
 import (
 	"Scraper/EbayBookBuilder/PriceConversion"
+	"Scraper/HttpUtil"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
@@ -35,9 +35,9 @@ func SearchMinCost(isbn string) float64 {
 	if err != nil {
 		log.Fatalf("Error making request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer HttpUtil.CloseBody(resp.Body)
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatalf("Error reading response body: %v", err)
 	}
@@ -259,9 +259,9 @@ func makeRequest(url string, headers map[string]string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer HttpUtil.CloseBody(resp.Body)
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

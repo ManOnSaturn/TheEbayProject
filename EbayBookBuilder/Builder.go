@@ -9,6 +9,9 @@ import (
 	"math"
 	"os"
 	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 func getCategorySwitch(categoryName string) DataTypes.Category {
@@ -100,7 +103,7 @@ func getFinalPrice(originalPriceString string, competitionPrice float64) string 
 	return fmt.Sprintf("%.2f", math.Round(finalPrice*100)/100)
 }
 
-func getFinalTitle(title string, author string, category string, language ...string) string {
+func getFinalTitle(title string, author string, category string, lang ...string) string {
 	// Remove unwanted characters
 	title = strings.ReplaceAll(title, ".", "")
 	title = strings.ReplaceAll(title, ":", "")
@@ -117,11 +120,12 @@ func getFinalTitle(title string, author string, category string, language ...str
 	}
 
 	// Capitalize words except articles
+	caser := cases.Title(language.Italian)
 	for i := 1; i < len(words); i++ {
 		if articles[strings.ToLower(words[i])] {
 			words[i] = strings.ToLower(words[i])
 		} else {
-			words[i] = strings.Title(strings.ToLower(words[i]))
+			words[i] = caser.String(strings.ToLower(words[i]))
 		}
 	}
 
@@ -165,9 +169,9 @@ func getFinalTitle(title string, author string, category string, language ...str
 		}
 	}
 
-	// Append language if provided
-	if len(language) > 0 && language[0] != "" {
-		lang := language[0]
+	// Append lang if provided
+	if len(lang) > 0 && lang[0] != "" {
+		lang := lang[0]
 		if len(title)+4+len(lang) <= 80 {
 			title = title + " in " + lang
 		} else if len(title)+1+len(lang) <= 80 {
@@ -201,7 +205,7 @@ func BuildEbayBook(isbn string) *DataTypes.EbayBook {
 	feltrinelliBook, _ := MongoDBInteractions.GetFeltrinelliBook(isbn)
 	if mondadoriBook == nil {
 		// If this is occurring, it might be because the book has been discovered absent during the sitemap scrape.
-		_, err := fmt.Fprintf(os.Stderr, "Mondadori book(%s) disappeared from database!", isbn)
+		_, err := fmt.Fprintf(os.Stderr, "Mondadori book(%s) disappeared from database!\n", isbn)
 		if err != nil {
 			panic(err)
 		}

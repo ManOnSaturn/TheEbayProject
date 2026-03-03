@@ -2,6 +2,7 @@ package MondadoriScraping
 
 import (
 	"Scraper/DataTypes"
+	"Scraper/HttpUtil"
 	"Scraper/MongoDBInteractions"
 	"Scraper/Proxy"
 	"bytes"
@@ -10,8 +11,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
-	"net/url"
 	"regexp"
 	"strconv"
 	"sync"
@@ -68,17 +67,12 @@ func scrapeXMLs() {
 
 func fetchNumberOfSitemaps() int {
 	// Fetch the XML content from the URL
-	resp, err := getRequestWithHeader("https://www.mondadoristore.it/sitemap.xml", nil)
+	resp, err := HttpUtil.GetRequestWithHeader("https://www.mondadoristore.it/sitemap.xml", nil)
 	if err != nil || resp == nil {
 		fmt.Println("Error fetching sitemap:", err)
 		return -1
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			fmt.Println("error closing body", err)
-		}
-	}(resp.Body)
+	defer HttpUtil.CloseBody(resp.Body)
 
 	// Read the response body
 	body, err := io.ReadAll(resp.Body)
@@ -120,16 +114,11 @@ func fetchNumberOfSitemaps() int {
 
 func downloadAndUncompressGzToXML(index int, proxy string) (*DataTypes.MondadoriSitemapItemFile, error) {
 	URL := "https://www.mondadoristore.it/sitemap-libri-" + strconv.Itoa(index) + ".xml.gz"
-	resp, err := getRequestWithHeader(URL, &proxy)
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			fmt.Println("error closing body", err)
-		}
-	}(resp.Body)
-	if err != nil {
-		return nil, err
+	resp, err := HttpUtil.GetRequestWithHeader(URL, &proxy)
+	if err != nil || resp == nil {
+		return nil, fmt.Errorf("error occurred while fetching mondadori sitemap-libri %d:%v\n", index, err)
 	}
+	defer HttpUtil.CloseBody(resp.Body)
 
 	// Create a gzip reader
 	gzReader, err := gzip.NewReader(resp.Body)
@@ -161,46 +150,4 @@ func downloadAndUncompressGzToXML(index int, proxy string) (*DataTypes.Mondadori
 	}
 
 	return &mondadoriSitemapItemFile, nil
-}
-
-func getRequestWithHeader(URL string, proxy *string) (*http.Response, error) {
-	// Create a new HTTP request
-	req, err := http.NewRequest("GET", URL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error creating request: %v", err)
-	}
-
-	// Set a custom User-Agent
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36")
-
-	// Create HTTP client with proxy if provided
-	client := &http.Client{}
-
-	if proxy != nil && *proxy != "" {
-		proxyUrl, err := url.Parse(*proxy)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing proxy URL: %v", err)
-		}
-
-		transport := &http.Transport{
-			Proxy: http.ProxyURL(proxyUrl),
-		}
-
-		client = &http.Client{
-			Transport: transport,
-		}
-	}
-
-	// Send the request
-	resp, err := client.Do(req)
-	if err != nil {
-		return resp, fmt.Errorf("error making request: %v", err)
-	}
-
-	// Check if the response status code is OK
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error: Received non-200 response code: %d", resp.StatusCode)
-	}
-
-	return resp, err
 }

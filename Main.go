@@ -14,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 import _ "net/http/pprof"
@@ -65,21 +64,6 @@ func main() {
 	}
 
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")
-}
-
-func addstuf() {
-	ebayDataWithMondadoriBooks := MongoDBInteractions.GetAllMondadoriBooksOnEbay()
-	var models []mongo.WriteModel
-
-	for isbn, ebayDataWithMondadoriBook := range ebayDataWithMondadoriBooks {
-		filter := bson.M{"ISBN": isbn}
-		categoryID := EbayBookBuilder.GetCategoryIDMondadori(ebayDataWithMondadoriBook.MondadoriBook.Categories[0])
-		update := bson.M{"$set": bson.M{"CategoryID": categoryID, "ImageURL": ebayDataWithMondadoriBook.MondadoriBook.ImageURL}}
-		updateModel := mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true)
-		models = append(models, updateModel)
-	}
-
-	MongoDBInteractions.UpsertEbayBooks(models)
 }
 
 func reprice() {
