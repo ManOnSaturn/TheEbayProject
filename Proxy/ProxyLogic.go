@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 )
 
 func GetProxies() []string {
@@ -20,7 +21,7 @@ func GetProxies() []string {
 	}
 
 	// Set the Authorization header
-	request.Header.Set("Authorization", "xfif3zqrn2ntnjrkaqhk34lu5n4khuq2plezy10j")
+	request.Header.Set("Authorization", os.Getenv("WEBSHARE_ACCESS_TOKEN"))
 
 	// Send the request using the default HTTP client
 	client := &http.Client{}

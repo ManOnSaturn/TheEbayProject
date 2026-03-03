@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"runtime"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -35,12 +34,8 @@ var ebayDataCollection *mongo.Collection
 var ebayBooksCollection *mongo.Collection
 
 func ConnectToMongo() {
-	var clientOptions *options.ClientOptions
-	if runtime.GOOS == "windows" {
-		clientOptions = options.Client().ApplyURI(os.Getenv("MONGO_URI"))
-	} else {
-		clientOptions = options.Client().ApplyURI("mongodb://admin:asdfadfhxvbxbsdfghs@localhost:30000/admin")
-	}
+	clientOptions := options.Client().ApplyURI(os.Getenv("MONGO_URI"))
+
 	var err error
 	client, err = mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {

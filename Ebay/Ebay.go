@@ -52,7 +52,7 @@ func SearchMinCost(isbn string) float64 {
 		for _, itemSummary := range itemSummaries {
 			item := itemSummary.(map[string]interface{})
 			seller := item["seller"].(map[string]interface{})
-			if seller["username"] == "ri-manga" {
+			if seller["username"] == os.Getenv("SELLER_USERNAME") {
 				continue
 			}
 

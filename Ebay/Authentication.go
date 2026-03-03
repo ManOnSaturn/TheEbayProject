@@ -9,17 +9,18 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"sync"
 	"time"
 )
 
 var (
 	appSettings = map[string]string{
-		"client_id":     "MattiaRi-Darkanne-PRD-d4d994de1-c57e2e21",
-		"client_secret": "PRD-4d994de1550a-49cd-4e94-a961-d07c",
-		"ruName":        "Mattia_Ripoli-MattiaRi-Darkan-xwbwvpae",
+		"client_id":     os.Getenv("EBAY_CLIENT_ID"),
+		"client_secret": os.Getenv("EBAY_CLIENT_SECRET"),
+		"ruName":        os.Getenv("EBAY_RU_NAME"),
 	}
-	refreshToken = "v^1.1#i^1#I^3#r^1#f^0#p^3#t^Ul4xMF8xMDowNEQyNzY5NDMxMDM1NUE0Mzg1NEUyMUREN0Y1RDMzMV8wXzEjRV4yNjA="
+	refreshToken = os.Getenv("EBAY_REFRESH_TOKEN")
 )
 
 var expirationTime time.Time

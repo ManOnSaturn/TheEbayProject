@@ -1,16 +1,20 @@
-import sys
+import os
 import smtplib
-from email.mime.text import MIMEText
+import sys
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+from dotenv import load_dotenv
 
 # Configuration
-sender_email = "mattiarip@gmail.com"
-receiver_email = "mattiarip@gmail.com"
+load_dotenv()
+sender_email = os.getenv("MAIL")
+receiver_email = os.getenv("MAIL")
 subject = "Error from Golang scraper"
 smtp_server = "smtp.gmail.com"
 smtp_port = 587
-smtp_username = "mattiarip@gmail.com"
-smtp_password = "chpiwikktegwtdzd"
+smtp_username = os.getenv("MAIL")
+smtp_password = os.getenv("MAIL_PASSWORD")
 
 def send_email(subject, body, sender, receiver):
     # Create the email

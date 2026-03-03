@@ -43,27 +43,31 @@ func main() {
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "--deleteAllBooksFromEbay" {
-		items, err := Ebay.GetInventoryItems()
-		if err != nil {
-			return
-		}
-		wg := sync.WaitGroup{}
-		semaphore := DataTypes.NewSemaphore(10)
-		for _, item := range items {
-			semaphore.Acquire()
-			wg.Add(1)
-			go func() {
-				defer func() {
-					wg.Done()
-					semaphore.Release()
-				}()
-				deleteBookFromEbay(item.SKU)
-			}()
-		}
-		wg.Wait()
+		deleteAllBooksFromEbay()
 	}
 
 	fmt.Println("Finished running in", time.Since(startTime).Seconds(), "seconds.")
+}
+
+func deleteAllBooksFromEbay() {
+	items, err := Ebay.GetInventoryItems()
+	if err != nil {
+		return
+	}
+	wg := sync.WaitGroup{}
+	semaphore := DataTypes.NewSemaphore(10)
+	for _, item := range items {
+		semaphore.Acquire()
+		wg.Add(1)
+		go func() {
+			defer func() {
+				wg.Done()
+				semaphore.Release()
+			}()
+			deleteBookFromEbay(item.SKU)
+		}()
+	}
+	wg.Wait()
 }
 
 func reprice() {
